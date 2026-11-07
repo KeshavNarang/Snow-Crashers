@@ -65,6 +65,15 @@ VL53L1X ──────► floor height (gated) ─────────�
   - the correction stays within ±10 cm of the takeoff floor.
   A reading that is too short is a boulder or tarp under the drone: it is
   marked in the map and never treated as a height change.
+- **Finding the pad.** The mat moves between visits: it can be anywhere in the
+  landing area's south-east corner. From the window the drone heads for the
+  pad's first `lookout` (goals.yaml) with the camera on that corner; most
+  mats are seen on the way. The detector needs the whole mat in the frame,
+  and the camera sees the floor only from ~0.85 m out, so the lookouts stand
+  well back, north of the corner, either side of A1. Together they see all of
+  it. At each, if the mat is still unseen, it sweeps the heading ±35° once
+  (3.5 s), then tries the next lookout. It aborts if no lookout shows the mat,
+  rather than hovering.
 - **Finish.** Over the pad (from a pad detector, below) it descends and disarms
   for CP5. It then re-arms, climbs to 2.1 m, flies straight over the barrier
   to its takeoff point and lands, for the return bonus.

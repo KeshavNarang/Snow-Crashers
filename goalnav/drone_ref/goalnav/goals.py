@@ -36,6 +36,7 @@ class Goal:
     line_turn: str = None       # the floor line turns 'left'/'right' here: place the goal just past the turn
     turn_to_net: float = None   # the net ahead is this far past that turn (CAD): it anchors that side
     confine: float = None       # plan the leg to this goal only within this far of its straight line
+    lookouts: tuple = ()        # pad: CAD points to look for it from, in turn, until it is seen
     axis: np.ndarray = None     # measured crossing direction (openings: the wall's normal)
     detected: np.ndarray = None
     estimate: np.ndarray = None
@@ -54,7 +55,8 @@ class Goal:
                    along=float(d.get('along', 0.2)), checkpoint=d.get('checkpoint'),
                    height=None if d.get('height') is None else float(d['height']), anchor=d.get('anchor'),
                    line_turn=d.get('line_turn'), turn_to_net=d.get('turn_to_net'),
-                   confine=None if d.get('confine') is None else float(d['confine']))
+                   confine=None if d.get('confine') is None else float(d['confine']),
+                   lookouts=tuple(tuple(float(v) for v in p) for p in d.get('lookouts', ())))
 
 
 def _rot(angle):
@@ -92,6 +94,10 @@ class Route:
     def direction(self, goal):
         a = math.radians(goal.heading_deg)
         return self.cad_vector((math.cos(a), math.sin(a)))
+
+    def lookout(self, goal, k):
+        """A goal's ``k``-th lookout, carried along with its prior."""
+        return goal.prior + self.cad_vector(np.asarray(goal.lookouts[k]) - np.asarray(goal.cad))
 
     def net_centre(self):
         return self.cad_point((0., 0.))
