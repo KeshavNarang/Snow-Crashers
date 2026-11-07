@@ -65,6 +65,11 @@ class MissionConfig:
     stop_after: str = None          # staged tests: land where it is and disarm once this goal passes
     pad_disarm: bool = False        # touch down on the pad armed, disarm only back on the launch mark
     pad_rest_s: float = 1.0         # on the pad before climbing again (under PX4's COM_DISARM_LAND)
+    pad_lookout_reach: float = 0.2  # at a pad lookout within this
+    pad_sweep_deg: float = 35.      # there, sweep the heading this far either side of the expected spot
+    pad_sweep_s: float = 3.5        # ... once, over this long
+    pad_look_aside_deg: float = 30. # on the way, turn the camera toward the mat's corner at most this far off the travel
+                                    # direction (it must still see where it goes: a wall end it never saw is not mapped)
     handover_height: float = 1.0    # climb straight up (stiff hold) to here, then navigate: low down, the
                                     # stands' struts and feet crowd the start and the camera cannot see behind
     sill_clearance: float = 0.14    # through a window: skids this far over its sill
@@ -111,7 +116,8 @@ class GoalMission:
         self.hold_xy = None
         self.fields = None
         self.pad_samples = []
-        self.pad_search_from = None     # where the drone backs off to when it has not seen the mat
+        self.pad_lookout = 0            # the lookout the drone looks for the mat from next (goals.yaml)
+        self.pad_sweep_since = None     # sweeping at it since
         self.return_from = None         # where the return's straight line starts (the pad)
         self.climb_h = None             # the takeoff's sliding height target
         self.stopped_after = None       # the goal a staged test (stop_after) ended at
@@ -364,7 +370,6 @@ class GoalMission:
                 if len(self.pad_samples) >= 3:
                     g.detected = np.median(np.array(self.pad_samples), axis=0)
                     g.landing = self._landing_spot(g.detected)
-                    self.pad_search_from = None
                 continue
             if g.line_turn and self._line_turn(g):
                 continue                      # The tape says exactly where; the map need not guess.
@@ -387,6 +392,8 @@ class GoalMission:
         targets = [g.estimate for g in route.upcoming(2)]
         if goal is not None and goal.kind in ('pad', 'reach'):
             targets = [goal.estimate]            # Arrive there; the lookahead would turn early.
+        if goal is not None and goal.kind == 'pad' and goal.detected is None and self.pad_lookout < len(goal.lookouts):
+            targets = [route.lookout(goal, self.pad_lookout)]      # Not seen yet: to where it can be.
         tight = [(g.estimate, g.axis, 0.45) for g in route.upcoming(3)
                  if g.kind == 'opening' and g.detected is not None and g.axis is not None]
         legs = route.upcoming(2) if not (goal is not None and goal.kind in ('pad', 'reach')) else [goal]
@@ -626,10 +633,13 @@ class GoalMission:
             return self._abort(t.t, f'no progress toward {goal.id}')
         if t.t - self.last_plan >= 1. / self.cfg.plan_hz:
             self.plan(t)
-        if goal.kind == 'pad':
+        searching = goal.kind == 'pad' and goal.detected is None
+        if searching:
+            setpoint = self._pad_search(t, dt, goal)
+            if setpoint is not None:
+                return setpoint
+        elif goal.kind == 'pad':
             offset = getattr(goal, 'landing', goal.estimate) - t.position[:2]
-            if goal.detected is None and (np.linalg.norm(offset) < 0.6 or self.pad_search_from is not None):
-                return self._pad_search(t, dt, goal)
             if np.linalg.norm(offset) < 0.6:
                 return self._pad_approach(t, dt, goal, offset)
         previous = route.goals[route.index - 1] if route.index > 0 else None
@@ -637,7 +647,15 @@ class GoalMission:
                 and previous is not None and previous.passed is not None:
             return self._through_window(t, dt, goal)
         yaw_now = yaw_of(t.rotation)
+        yaw_before = self.follower.yaw if self.follower.yaw is not None else yaw_now
         velocity, yaw = self.follower.step(dt, self.path, t.position[:2], self.speed, yaw_now)
+        if searching:                         # On the way to a lookout: the camera toward where the mat may be.
+            face = math.atan2(*(goal.estimate - t.position[:2])[::-1])
+            if np.linalg.norm(velocity) > 0.1:
+                travel, aside = math.atan2(velocity[1], velocity[0]), math.radians(self.cfg.pad_look_aside_deg)
+                face = travel + float(np.clip(wrap(face - travel), -aside, aside))
+            self.follower.yaw = yaw_before
+            yaw = self._turn_to(face, dt)
         push = self._repel(t)
         velocity = self._hold_if_stopped(t, velocity) + push
         if self.hold_xy is not None:
@@ -728,29 +746,36 @@ class GoalMission:
             self._enter('PAD_DESCEND', t.t)
         return Setpoint(np.array([*self.follower.velocity, vz]), self.follower.yaw), []
 
-    def _pad_search(self, t, dt, goal, standoff=1.2, sweep=math.radians(60), rate=0.4):
-        """Near the mat's expected spot without having seen it. The camera sees
-        the floor only from ~0.9 m out, so back off (the way the drone came) to
-        ``standoff`` from the spot, facing it, then sweep the heading either
-        side of it until the mat is found."""
-        p, spot = t.position[:2], np.asarray(goal.estimate, float)
-        if self.pad_search_from is None:
-            away = p - spot
-            self.pad_search_from = spot + away / max(float(np.linalg.norm(away)), 1e-6) * standoff
-            self.pad_search_since = t.t
-        target = self.pad_search_from
-        facing = math.atan2(*(spot - target)[::-1])
-        error = target - p
-        if np.linalg.norm(error) > 0.08:
-            self.follower.yaw = facing
-            self.pad_search_since = t.t
-        else:
-            phase = (t.t - self.pad_search_since) * rate / sweep
-            self.follower.yaw = wrap(facing + sweep * math.sin(phase * math.pi / 2))
-        velocity = np.clip(1.2 * error - 0.6 * t.velocity[:2], -0.3, 0.3) + self._repel(t)
-        vz = self.follower.climb(self.floor.height(t.position[2]), self.cfg.cruise_height)
-        self.progress_at = t.t if t.t - self.pad_search_since < 15. else self.progress_at
-        return Setpoint(np.array([*velocity, vz]), self.follower.yaw), []
+    def _pad_search(self, t, dt, goal):
+        """The mat not seen yet: fly to each of the goal's lookouts in turn
+        (the planned path, the camera kept on the expected spot) and sweep the
+        heading once there. None while on the way; aborts when no lookout
+        shows it (never hovers looking forever)."""
+        if self.pad_lookout >= len(goal.lookouts):
+            return self._abort(t.t, 'pad not seen from any lookout')
+        look = self.route.lookout(goal, self.pad_lookout)
+        if self.pad_sweep_since is None:
+            off = float(np.linalg.norm(look - t.position[:2]))
+            if off > self.cfg.pad_lookout_reach and not (off < 0.5 and self.speed < 0.08):
+                return None                   # On the way (or stopped just short of it: look from there).
+            self.pad_sweep_since = t.t
+            self.status.events.append((round(t.t, 3), 'pad lookout', str(self.pad_lookout)))
+        phase = (t.t - self.pad_sweep_since) / self.cfg.pad_sweep_s
+        if phase >= 1.:
+            self.pad_lookout, self.pad_sweep_since, self.progress_at = self.pad_lookout + 1, None, t.t
+        face = math.atan2(*(goal.estimate - look)[::-1])
+        yaw = self._turn_to(face + math.radians(self.cfg.pad_sweep_deg) * math.sin(2 * math.pi * min(phase, 1.)), dt)
+        error = self.floor.height(t.position[2]) - self.cfg.cruise_height
+        az = float(np.clip(-4.0 * error - 3.0 * t.velocity[2], -2., 2.))
+        position = np.array([*look, self.floor.floor_z + self.cfg.cruise_height])
+        return Setpoint(np.array([*self._repel(t), 0.]), yaw, position=position,
+                        acceleration=np.array([*self._stiff(look, t), az])), []
+
+    def _turn_to(self, yaw, dt):
+        """The follower's yaw, turned toward ``yaw`` at its rate limit."""
+        rate = self.follower.cfg.yaw_rate * dt
+        self.follower.yaw = wrap(self.follower.yaw + float(np.clip(wrap(yaw - self.follower.yaw), -rate, rate)))
+        return self.follower.yaw
 
     def _pad_descend(self, t, dt):
         """Straight down onto the landing spot, its position held by PX4's

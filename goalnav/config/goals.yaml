@@ -72,9 +72,19 @@ goals:
 
 # CP4 through the window (+5 points), then the landing. The window legs are
 # `confine`d to their straight line: never around the wall, even if it looks shut.
+# The mat moves between visits: anywhere in the landing area's south-east
+# corner (about x -2.35..-0.85, y -2.6..-1.55, clear of the window wall), with
+# three large rocks around it. `at` is that corner's middle. Most mats are
+# seen straight out of the window; if not, the drone goes to each `lookout` in
+# turn, facing `at`, and sweeps once. The detector needs the whole mat in the
+# frame, and the camera sees the floor only from ~0.85 m out, so a lookout must
+# stand well back: the first (north, between A1 and the window wall, 0.65 m
+# off A1) sees ~80% of the corner, the second (north-west, the far side of A1)
+# the rest.
   - {id: south_room,     kind: waypoint, at: [1.30, -1.95],  heading: 190, across: 0.40, along: 0.3}
   - {id: window_lookout, kind: waypoint, at: [0.52, -2.47],  heading: 160, across: 0.35, along: 0.3}
   - {id: window_front,   kind: waypoint, at: [0.395, -2.48], heading: 160, across: 0.0,  along: 0.0, anchor: window, height: 1.18, confine: 0.6}
   - {id: window,         kind: opening,  at: [-0.45, -2.18], heading: 160, across: 0.40, along: 0.0, checkpoint: CP4, height: 1.18, confine: 0.6}
   - {id: window_back,    kind: waypoint, at: [-1.01, -1.97], heading: 160, across: 0.0,  along: 0.0, anchor: window, height: 1.18, confine: 0.6}
-  - {id: pad,            kind: pad,      at: [-1.95, -2.55], heading: 200, across: 0.30, along: 0.3, checkpoint: CP5}
+  - {id: pad,            kind: pad,      at: [-1.65, -2.10], heading: 200, across: 0.30, along: 0.3, checkpoint: CP5,
+     lookouts: [[-0.75, -0.35], [-2.10, -0.30]]}
