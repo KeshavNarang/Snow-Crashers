@@ -67,10 +67,13 @@ CP1_FROM_NET = 3.048 - 2.584
 # steeply): toward the tunnel exit, narrowing it, degrees from straight south.
 C1_LEAN_DEG = (8., 15.)
 # The window (scan): centred on its wall, 0.90 wide, sill 0.87 m, 0.62 m tall.
-WINDOW_SHIFT = (-0.03, 0.03)     # along the wall from its middle
+WINDOW_SHIFT = (-0.04, 0.04)     # along the wall from its middle
 WINDOW_WIDTH = (0.80, 0.95)      # the width varies (team); 0.58 is the rotor span
 WINDOW_HEIGHT = (0.58, 0.66)
 WINDOW_SILL = (0.80, 0.92)
+# Placement offsets (positions and turns) are this much wider than first
+# estimated: the course has been seen rebuilt differently several times.
+JITTER = 1.3
 # The landing mat (team): toward the landing area's south-east corner, a little
 # +x -y of where the scan shows it; found by its colour, so its place varies
 # (x, y ranges about the spot; less toward the south net).
@@ -151,7 +154,8 @@ class Sampler:
                       'strut_top': None, 'strut_out': self.u(0.26, 0.32, False)}
 
     def u(self, low, high, scale=True):
-        k = self.s if scale else 1.
+        """Uniform in [low, high]; ``scale``: a placement offset, by severity and JITTER."""
+        k = self.s * JITTER if scale else 1.
         return float(self.rng.uniform(low * k, high * k))
 
     # -- the barrier and the tunnel --------------------------------------------
