@@ -588,14 +588,17 @@ def _place_boulders(sampler, groups, pad, tries=60, gap=0.05):
     solid = (np.argwhere(grid) + 0.5) * res - extent
     boulders = []
     for k, (x, y) in enumerate(BOULDERS):
-        for _ in range(tries):
+        for i in range(tries):
+            # A rock that cannot stand at its jittered CAD spot (at severity 0 it
+            # has none) searches ever further, up to the full spread.
+            reach = max(sampler.s, (i + 1) / tries)
             radius, height = float(rng.uniform(0.2, 0.3)), float(rng.uniform(0.45, 0.5334))   # CAD: 21 in at most
             if k == 4:                        # B5: the rock in front of the mat.
                 edge, toward = PAD_ROCK
                 spot = np.asarray(pad[:2]) + np.asarray(toward) * (edge + radius + sampler.u(0., 0.15))
                 centre = np.array([spot[0] + sampler.u(-0.1, 0.1), spot[1] + sampler.u(-0.1, 0.1)])
             else:
-                centre = np.array([x + sampler.u(-0.35, 0.35), y + sampler.u(-0.35, 0.35)])
+                centre = np.array([x + reach * float(rng.uniform(-0.35, 0.35)), y + reach * float(rng.uniform(-0.35, 0.35))])
             clear = (np.abs(centre) + radius <= NET - 0.1).all() \
                 and np.hypot(*(solid - centre).T).min() > radius + gap \
                 and all(math.dist(centre, b['xy']) > radius + b['radius'] + gap for b in boulders) \
