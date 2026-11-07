@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>snowcrashers_nav</name>
+  <version>0.1.0</version>
+  <description>
+    SnowCrashers skybeta mission: wait for the pilot's arm + Position, climb 2 m, fly 2 m
+    forward, land with a slow descent so PX4 detects the landing and disarms. Talks only to
+    /skybeta/state, /visual_slam/tracking/odometry and /skybeta/setpoint/{pose,twist}.
+  </description>
+  <maintainer email="lukema@stanford.edu">snowcrashers</maintainer>
+  <license>Apache-2.0</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>skybeta_flight_interface</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
