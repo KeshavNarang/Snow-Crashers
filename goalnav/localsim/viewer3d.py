@@ -21,7 +21,7 @@ from drone_ref.course import read_obj      # noqa: E402
 
 VENDOR = ROOT / 'localsim/vendor/three'
 TEMPLATE = ROOT / 'localsim/viewer3d.html'
-KINDS = (('Tunnel tarp', 'rocktarp'), ('Tunnel drape', 'rocktarp'), ('Tarp', 'tarp'), ('Panel', 'plywood'),
+KINDS = (('PVC', 'pvc'), ('Tunnel tarp', 'rocktarp'), ('Tunnel drape', 'rocktarp'), ('Tarp', 'tarp'), ('Panel', 'plywood'),
          ('Frame', 'wood'), ('Paver', 'paver'), ('Tube oval', 'wiremesh'), ('Tube', 'metal'),
          ('Boulder', 'rock'), ('Floor', 'floor'))
 
