@@ -91,10 +91,15 @@ def scan_panel(root, spec, nominal):
     out.append(f'<polyline points="{pts([centre - axis * 0.45, centre + axis * 0.45])}" class="window"/>')
     out.append(text(centre + (0.95, 0.27), 'WINDOW (CP4)', 'win-l'))
     out.append(text(centre + (0.95, 0.15), '0.90 wide, 0.87-1.50 m up', 'small'))
-    x, y = xy((-1.95, -2.55)); out.append(f'<rect x="{x-0.3*S}" y="{y-0.3*S}" width="{0.6*S}" height="{0.6*S}" class="mat"/>')
-    out.append(text((-1.95, -2.13), 'PAD MAT (CP5)', 'pad-l')); out.append(text((-1.95, -2.25), 'as placed (varied in tests)', 'small'))
-    rx, ry = xy((-1.95 + 0.85 * 0.75, -2.55 + 0.53 * 0.75)); out.append(f'<circle cx="{rx}" cy="{ry}" r="{0.25*S}" class="boulder"/>')
-    out.append(text((-1.95 + 0.64, -2.55 + 0.40 - 0.04), 'rock', 'small'))
+    # The mat moves between visits: its centre anywhere in this box (clear of the window wall), three rocks round it.
+    (x0, x1), (y0, y1) = messy_course.PAD_AREA
+    out.append(f'<polygon points="{pts([(x0, y0), (x1, y0), (x1, y1), (x0, y1)])}" class="mat"/>')
+    out.append(text(((x0 + x1) / 2, y1 + 0.16), 'PAD MAT (CP5): centre somewhere here', 'pad-l'))
+    out.append(text(((x0 + x1) / 2, y1 + 0.04), 'with three large rocks round it', 'small'))
+    pad = next(g for g in spec['goals'] if g['kind'] == 'pad')
+    for k, look in enumerate(pad.get('lookouts', [])):
+        lx, ly = xy(look); out.append(f'<circle cx="{lx}" cy="{ly}" r="5" class="mat-cad"/>')
+        out.append(text(np.asarray(look) + (0, 0.1), f'pad lookout {k + 1}', 'small'))
     sx, sy = xy((-2.25, -2.30)); out.append(f'<rect x="{sx-0.3*S}" y="{sy-0.3*S}" width="{0.6*S}" height="{0.6*S}" class="mat-cad"/>')
     for key, line in nominal['lines'].items():
         if line.get('checkpoint') in (1, 2, 3) and key != 'gate_b':

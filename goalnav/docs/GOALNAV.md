@@ -101,7 +101,11 @@ course per seed from the CAD's topology and photos of the event net:
   - **The tunnel** is ~0.3 m short and ~10 cm lower. It is a wire-mesh hoop
     tube with a rock-print tarp draped over it and hanging off its mouth, and
     tall rocks at its four corners.
-  - **The target** is a smaller blue H mat, rotated 10–30°.
+  - **The target** is a smaller blue H mat, at any rotation. Its centre is
+    anywhere in the landing area's south-east corner (`PAD_AREA`), at least
+    0.8 m from the window wall's centreline and wholly inside the net. Three
+    large rocks stand around it, each one's near edge 0.40–1.0 m (1.3 ft at
+    the nearest) from the H.
 - **Floor:** an orange wrinkled tarp, and the black tape line through the maze
   (the CAD guideline, carried with the dividers it runs between).
 - **Room:** an almost invisible net, with people walking, tables and the hall

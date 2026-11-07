@@ -36,7 +36,7 @@ SCAN_BARRIER_Y = 0.41             # as scanned
 TUBE = {'cx': 2.3114, 'cz': 0.9398, 'hw': 0.7366, 'hh': 0.9144, 'y_south': -0.3048, 'y_north': 1.2192}
 LAUNCH = (-2.5146, 0.9144)
 PAD = (-2.04216, -0.79248, 0.76188)
-BOULDERS = [(2.01, -2.47), (2.53, -1.55), (0.79, -2.35), (-2.56, -2.50), (-1.34, -2.38)]
+BOULDERS = [(2.01, -2.47), (2.53, -1.55), (0.79, -2.35)]    # in the east room; more by the mat (PAD_ROCKS)
 # Walls: CAD group, the end that is attached ('barrier', 'north'/'south' net, or None).
 WALLS = {'M1': ('M1 maze divider', 'barrier'), 'M2': ('M2 maze divider', 'north'),
          'M3': ('M3 maze divider', 'barrier'), 'C1': ('C1 chicane wall', 'barrier'),
@@ -74,15 +74,17 @@ WINDOW_SILL = (0.80, 0.92)
 # Placement offsets (positions and turns) are this much wider than first
 # estimated: the course has been seen rebuilt differently several times.
 JITTER = 1.3
-# The landing mat (team): toward the landing area's south-east corner, a little
-# +x -y of where the scan shows it; found by its colour, so its place varies
-# (x, y ranges about the spot; less toward the south net).
-PAD_SPOT = (-1.95, -2.55)
-PAD_SPREAD = ((-0.25, 0.25), (-0.10, 0.30))
-# One rock in front of the mat (team), on the side the drone comes from (the
-# window's), outside the pad's 5 ft ring (CP5 needs the whole drone inside it).
-PAD_ROCK = (0.62, (0.85, 0.53))         # its near edge this far from the mat's centre, and toward
-ROCK_CLEAR = 0.55                       # no rock's edge nearer the mat's centre than this
+# The landing mat (team): somewhere in the landing area's south-east (+x -y)
+# corner, and it has moved between visits, so anywhere in this box (centre,
+# not scaled by severity) clear of the window wall and inside the net.
+PAD_AREA = ((-2.35, -0.85), (-NET + 0.45, -1.55))
+PAD_FROM_WINDOW_WALL = 0.80             # mat centre to the wall's centreline (feet, struts, tarp)
+# Three large rocks around the mat (team), anywhere around it: each one's near
+# edge at least 1.3 ft from the H at the mat's centre, and no further than
+# PAD_ROCK_REACH (they are "nearby").
+PAD_ROCKS = 3
+ROCK_CLEAR = 0.40                       # 1.3 ft: no rock's edge nearer the mat's centre than this
+PAD_ROCK_REACH = 1.0
 # Around the net (team): the next net 3 ft north (net to net), empty but for a
 # flat blue floor tarp and its PVC frame; the hall's glass wall 8 ft west of the west net.
 NEXT_COURSE_GAP = 0.914
@@ -508,6 +510,8 @@ def validate(course, radius=BODY_RADIUS + 0.05):
                 np.hypot(*np.mgrid[-r:r + 1, -r:r + 1]) * res <= clear].any():
             problems.append('a tarp touches the drone on the launch mark')
             break
+    if not getattr(course, 'rocks_placed', True):
+        problems.append('a rock found no room')
     for rock in course.boulders:
         if math.dist(rock['xy'], course.pad[:2]) - rock['radius'] < ROCK_CLEAR:
             problems.append('a rock beside the mat')
@@ -583,35 +587,61 @@ def _surroundings(course):
     course.hall = {'next_course_dy': float(dy), 'glass_x': float(-course.nets['west'] - GLASS_FROM_NET)}
 
 
-def _place_boulders(sampler, groups, pad, tries=60, gap=0.05):
-    """The five rocks, each re-drawn until it stands clear of every wall,
-    stand, paver, the tunnel and the other rocks, inside the net, and off the
-    mat (B5 in front of it)."""
+def _place_pad(sampler, walls, tries=200):
+    """The mat: centre anywhere in PAD_AREA, PAD_FROM_WINDOW_WALL off the
+    window wall, every corner inside the net; size (m) and yaw (deg), any
+    turn (a square mat repeats every 90 degrees)."""
+    a, b = (np.asarray(p) for p in next(w for w in walls if w.name == 'C2a').pieces[0])
+    size, yaw = sampler.u(0.75, 0.9, False), sampler.u(-45., 45., False)
+    corners = (np.array([[1, 1], [1, -1], [-1, -1], [-1, 1]]) * size / 2) @ _rot(math.radians(yaw)).T
+    (x0, x1), (y0, y1) = PAD_AREA
+    for _ in range(tries):
+        centre = np.array([sampler.u(x0, x1, False), sampler.u(y0, y1, False)])
+        f = np.clip((centre - a) @ (b - a) / ((b - a) @ (b - a)), 0., 1.)
+        if np.linalg.norm(centre - (a + f * (b - a))) >= PAD_FROM_WINDOW_WALL \
+                and (np.abs(centre + corners) <= NET - 0.05).all():
+            break
+    return (float(centre[0]), float(centre[1]), PAD[2]), (size, yaw)
+
+
+def _rock_spot(sampler, k, pad, reach):
+    """A rock's radius and centre: B1-B3 within ``reach`` of the full spread
+    about their CAD spots, the rest anywhere around the mat, near edge
+    ROCK_CLEAR to PAD_ROCK_REACH from its centre."""
+    rng = sampler.rng
+    if k < len(BOULDERS):
+        x, y = BOULDERS[k]
+        return float(rng.uniform(0.2, 0.3)), np.array([x + reach * float(rng.uniform(-0.35, 0.35)),
+                                                       y + reach * float(rng.uniform(-0.35, 0.35))])
+    radius = float(rng.uniform(0.24, 0.32))                      # large
+    angle, edge = sampler.u(-math.pi, math.pi, False), sampler.u(ROCK_CLEAR, PAD_ROCK_REACH, False)
+    return radius, np.asarray(pad[:2]) + (edge + radius) * np.array([math.cos(angle), math.sin(angle)])
+
+
+def _place_boulders(sampler, groups, pad, tries=80, gap=0.05):
+    """The rocks, each re-drawn until it stands clear of every wall, stand,
+    paver, the tunnel and the other rocks, inside the net, and off the mat.
+    Returns them and whether every one found room."""
     rng = sampler.rng
     grid, res, extent = _band_raster(groups, 0.0, 0.6)
     solid = (np.argwhere(grid) + 0.5) * res - extent
-    boulders = []
-    for k, (x, y) in enumerate(BOULDERS):
+    boulders, placed_all = [], True
+    for k in range(len(BOULDERS) + PAD_ROCKS):
         for i in range(tries):
             # A rock that cannot stand at its jittered CAD spot (at severity 0 it
             # has none) searches ever further, up to the full spread.
-            reach = max(sampler.s, (i + 1) / tries)
-            radius, height = float(rng.uniform(0.2, 0.3)), float(rng.uniform(0.45, 0.5334))   # CAD: 21 in at most
-            if k == 4:                        # B5: the rock in front of the mat.
-                edge, toward = PAD_ROCK
-                spot = np.asarray(pad[:2]) + np.asarray(toward) * (edge + radius + sampler.u(0., 0.15))
-                centre = np.array([spot[0] + sampler.u(-0.1, 0.1), spot[1] + sampler.u(-0.1, 0.1)])
-            else:
-                centre = np.array([x + reach * float(rng.uniform(-0.35, 0.35)), y + reach * float(rng.uniform(-0.35, 0.35))])
+            radius, centre = _rock_spot(sampler, k, pad, max(sampler.s * JITTER, (i + 1) / tries))
             clear = (np.abs(centre) + radius <= NET - 0.1).all() \
                 and np.hypot(*(solid - centre).T).min() > radius + gap \
                 and all(math.dist(centre, b['xy']) > radius + b['radius'] + gap for b in boulders) \
                 and math.dist(centre, pad[:2]) - radius >= ROCK_CLEAR
             if clear:
                 break
+        placed_all &= bool(clear)
+        height = float(rng.uniform(0.45, 0.5334))        # CAD: 21 in at most
         groups[f'Boulder {k + 1}'] = mm.rock(tuple(centre), radius, height, rng)
         boulders.append({'xy': [float(c) for c in centre], 'radius': radius, 'height': height})
-    return boulders
+    return boulders, placed_all
 
 
 def _sample(seed, severity):
@@ -623,8 +653,7 @@ def _sample(seed, severity):
     for key in WALLS:
         placed[key] = sampler.wall(key, joints, placed)
     walls = barrier + list(placed.values())
-    (x0, x1), (y0, y1) = PAD_SPREAD
-    pad = (PAD_SPOT[0] + sampler.u(x0, x1), PAD_SPOT[1] + sampler.u(y0, y1), PAD[2])
+    pad, pad_mat = _place_pad(sampler, walls)
     for wall in walls:
         if wall.name == 'A1':                 # Its tarped face toward the landing area: no stand feet on the mat.
             a, b = (np.asarray(p) for p in wall.pieces[0])
@@ -632,10 +661,9 @@ def _sample(seed, severity):
             wall.tarp_side = 1 if (np.asarray(pad[:2]) - (a + b) / 2) @ normal > 0 else -1
         groups.update(wall_meshes(wall, rng, (sampler.panel['strut_top'], sampler.panel['strut_out'])))
     groups.update(mf.centre_column(Sampler.barrier_y(joints, mf.CENTRE_X)))
-    boulders = _place_boulders(sampler, groups, pad)
+    boulders, rocks_placed = _place_boulders(sampler, groups, pad)
     groups['Floor'] = (np.array([[-NET, -NET, -0.01], [NET, -NET, -0.01], [NET, NET, -0.01], [-NET, NET, -0.01]]),
                        np.array([[0, 1, 2], [0, 2, 3]]))
-    pad_mat = (sampler.u(0.75, 0.9, False), float(rng.choice([-1, 1]) * rng.uniform(10, 30)))
     # Each net a few cm off the CAD's, but never inside what stands against it.
     solid = np.vstack([v for name, (v, t) in groups.items() if name != 'Floor' and len(t)])
     reach = {'east': solid[:, 0].max(), 'west': -solid[:, 0].min(), 'north': solid[:, 1].max(), 'south': -solid[:, 1].min()}
@@ -653,6 +681,7 @@ def _sample(seed, severity):
     course = Course(seed, severity, groups, walls, tunnel, pad, launch, nets, _clutter(rng, nets),
                     boulders=boulders)
     course.pad_mat = pad_mat
+    course.rocks_placed = rocks_placed
     course.lines = _lines(walls, tunnel, joints, nets)
     course.guideline = guideline(walls, joints)
     for k in (1, 2):                                  # The line turns east at CP1.
