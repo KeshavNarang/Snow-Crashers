@@ -80,8 +80,8 @@ PAD_SPREAD = ((-0.25, 0.25), (-0.10, 0.30))
 # window's), outside the pad's 5 ft ring (CP5 needs the whole drone inside it).
 PAD_ROCK = (0.62, (0.85, 0.53))         # its near edge this far from the mat's centre, and toward
 ROCK_CLEAR = 0.55                       # no rock's edge nearer the mat's centre than this
-# Around the net (team): an identical course 3 ft north (net to net), on a blue
-# floor tarp; the hall's glass wall 8 ft west of the west net.
+# Around the net (team): the next net 3 ft north (net to net), empty but for a
+# flat blue floor tarp and its PVC frame; the hall's glass wall 8 ft west of the west net.
 NEXT_COURSE_GAP = 0.914
 GLASS_FROM_NET = 2.438
 # The tunnel sits slightly lower than the model: its top about 10 cm down.
@@ -570,10 +570,11 @@ def generate(seed, severity=1.0, attempts=120):
 
 
 def _surroundings(course):
-    """The next course (a copy of this one) north across the aisle, and the glass wall west."""
+    """The next net north across the aisle (its PVC frame; the viewer and the
+    RGB model lay its blue floor tarp), and the glass wall west."""
     dy = course.nets['north'] + NEXT_COURSE_GAP + course.nets['south']
     for name, (vertices, tris) in list(course.groups.items()):
-        if name != 'Floor':
+        if name.startswith('PVC'):
             course.groups[f'{name} (next course)'] = (vertices + np.array([0., dy, 0.]), tris)
     course.hall = {'next_course_dy': float(dy), 'glass_x': float(-course.nets['west'] - GLASS_FROM_NET)}
 
@@ -623,7 +624,7 @@ def _sample(seed, severity):
             normal = np.array([-(b - a)[1], (b - a)[0]])
             wall.tarp_side = 1 if (np.asarray(pad[:2]) - (a + b) / 2) @ normal > 0 else -1
         groups.update(wall_meshes(wall, rng, (sampler.panel['strut_top'], sampler.panel['strut_out'])))
-    groups.update(mf.centre_column())
+    groups.update(mf.centre_column(Sampler.barrier_y(joints, mf.CENTRE_X)))
     boulders = _place_boulders(sampler, groups, pad)
     groups['Floor'] = (np.array([[-NET, -NET, -0.01], [NET, -NET, -0.01], [NET, NET, -0.01], [-NET, NET, -0.01]]),
                        np.array([[0, 1, 2], [0, 2, 3]]))

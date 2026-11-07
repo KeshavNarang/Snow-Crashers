@@ -31,7 +31,7 @@ NET_RETURN = (0.003, 0.02)       # p = min(cap, k / r^2): thin black cord, almos
 RANGE_MAX_M = 4.0
 RANGE_HALF_ANGLE = math.radians(13.5)
 MESH_RETURN = 0.35               # wire tunnel: share of mesh voxels seen per frame
-SOLID, MESH, TARP = 1, 2, 3
+SOLID, MESH, TARP, PVC = 1, 2, 3, 4
 GLASS_RETURN = 0.04              # the hall's windows: a reflection now and then, else daylight (no depth)
 MULLION_PITCH, MULLION_HALF = 1.5, 0.04
 GLASS_SILL, GLASS_HEAD = 0.45, 2.7
@@ -74,13 +74,13 @@ class MessyWorld(World):
             return np.load(cache)
         label = np.zeros(self.solid.shape, np.int8)
         vertices = np.asarray(self.mesh.vertices, float)
-        order = [(MESH, ('Tube oval',)), (TARP, ('Tarp', 'Tunnel tarp', 'Tunnel drape')), (SOLID, None)]
+        order = [(MESH, ('Tube oval',)), (TARP, ('Tarp', 'Tunnel tarp', 'Tunnel drape')), (PVC, ('PVC',)), (SOLID, None)]
         for value, prefixes in order:
             for name, tris in self.mesh.groups.items():
                 if not tris or name.startswith(('Floor',)) and value != SOLID:
                     continue
                 kind = MESH if name.startswith('Tube oval') else TARP if name.startswith(
-                    ('Tarp', 'Tunnel tarp', 'Tunnel drape')) else SOLID
+                    ('Tarp', 'Tunnel tarp', 'Tunnel drape')) else PVC if name.startswith('PVC') else SOLID
                 if kind != value:
                     continue
                 cells = self._surface_cells(vertices[np.asarray(tris)], self.origin, self.shape)

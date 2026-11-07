@@ -14,7 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
-from localsim.messy_world import MESH, TARP
+from localsim.messy_world import MESH, PVC, TARP
 
 ROOT = Path(__file__).resolve().parents[1]
 ORANGE = np.array([226, 92, 44], float)
@@ -107,12 +107,12 @@ def render(world, camera, painter, position, rotation, rng):
         rgb[on_floor] = painter.colour(floor_point[on_floor, :2])
     hall = world.meta.get('hall')
     if hall:
-        # The next course's floor: the same layout (its own mat and tape) on a blue tarp.
+        # The next net's floor: a plain blue tarp.
         shift = np.array([0., hall['next_course_dy']])
         next_floor = np.isfinite(floor_t) & ((floor_t <= hit + 0.03) | grazing) & ~on_floor \
             & np.all((floor_point[:, :2] - shift >= inside_net[0]) & (floor_point[:, :2] - shift <= inside_net[1]), axis=1)
         if next_floor.any():
-            rgb[next_floor] = painter.colour(floor_point[next_floor, :2] - shift, base=BLUE_TARP)
+            rgb[next_floor] = BLUE_TARP
         on_floor = on_floor | next_floor
     solid = np.isfinite(hit) & ~on_floor
     if solid.any():
@@ -122,6 +122,7 @@ def render(world, camera, painter, position, rotation, rng):
         shade = 0.85 + 0.3 * _hash(np.floor(p[:, 0] / 0.3), np.floor(p[:, 2] / 0.3), 5)[:, None]
         colour = np.where((label == TARP)[:, None], _tarp_colour(world, p), [208, 182, 138])
         colour = np.where((label == MESH)[:, None], [45, 40, 34], colour)
+        colour = np.where((label == PVC)[:, None], [24, 24, 26], colour)
         rgb[solid] = colour * shade
     rest = ~on_floor & ~solid
     if rest.any():

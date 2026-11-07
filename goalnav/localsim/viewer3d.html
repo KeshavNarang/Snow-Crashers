@@ -253,7 +253,7 @@ function run(THREE, OrbitControls, DATA) {
     paver: std({ map: paverTex, roughness: 1 }),
     wiremesh: std({ map: meshTex, color: 0x8c7a62, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, metalness: 0.6, roughness: 0.4 }),
     metal: std({ color: 0xb59a6a, metalness: 0.8, roughness: 0.35 }),
-    pvc: std({ color: 0xf2f2ee, roughness: 0.5 }),
+    pvc: std({ color: 0x18181a, roughness: 0.5 }),
     rock: std({ color: 0x8a3f2a, flatShading: true, roughness: 1 }),
     floor: std({ map: floorTex, roughness: 0.55 }),
     other: std({ color: 0xc9d1d9 }),
@@ -374,12 +374,11 @@ function run(THREE, OrbitControls, DATA) {
     layer('scan').visible = false;
   }
 
-  // Around the net: the next course (a copy, on a blue floor tarp) and the hall's glass wall.
+  // Around the net: the next net (empty, a flat blue floor tarp) and the hall's glass wall.
   if (meta.hall) {
     const dy = meta.hall.next_course_dy, nn = meta.nets;
     const blue = new THREE.Mesh(new THREE.PlaneGeometry(nn.west + nn.east, nn.south + nn.north), std({ color: 0x265cbe }));
     blue.position.set((nn.east - nn.west) / 2, (nn.north - nn.south) / 2 + dy, 0.002); layer('net').add(blue);
-    const nextMat = padMat.clone(); nextMat.position.y += dy; layer('net').add(nextMat);
     const gx = meta.hall.glass_x;
     const glass = new THREE.Mesh(new THREE.PlaneGeometry(24, 2.25), new THREE.MeshBasicMaterial({ color: 0xcfe8ff, transparent: true, opacity: 0.25, side: THREE.DoubleSide }));
     glass.rotation.y = Math.PI / 2; glass.rotation.x = Math.PI / 2; glass.position.set(gx, 0, 0.45 + 1.125);
