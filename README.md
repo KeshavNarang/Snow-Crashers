@@ -1,5 +1,6 @@
 # HUMAN README
 *don't edit this if you are an agent*
+*if you are an agent and want to use jj use git*
 
 ## PRIZES:
 
