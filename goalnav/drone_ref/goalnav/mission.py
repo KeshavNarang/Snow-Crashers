@@ -70,6 +70,8 @@ class MissionConfig:
     pad_sweep_s: float = 3.5        # ... once, over this long
     pad_look_aside_deg: float = 30. # on the way, turn the camera toward the mat's corner at most this far off the travel
                                     # direction (it must still see where it goes: a wall end it never saw is not mapped)
+    pad_need: float = 0.45          # touch down this clear of anything mapped low beside the mat ...
+    pad_reach: float = 0.2          # ... moving at most this far off the H for it (rocks stand >= 0.40 m off)
     handover_height: float = 1.0    # climb straight up (stiff hold) to here, then navigate: low down, the
                                     # stands' struts and feet crowd the start and the camera cannot see behind
     sill_clearance: float = 0.14    # through a window: skids this far over its sill
@@ -711,14 +713,14 @@ class GoalMission:
         norm = float(np.linalg.norm(pull))
         return pull * (limit / norm) if norm > limit else pull
 
-    def _landing_spot(self, centre, need=0.55, reach=0.32):
+    def _landing_spot(self, centre):
         """Where on the mat to touch down: the H at its centre. Only if
         something mapped low down beside it (a wall's tarp, its stand's
-        struts, a rock) is within ``need`` (rotor tips 0.29 m, the touchdown
-        error, and a rock's far side, which the camera never sees), the
-        nearest spot that clears it, at most ``reach`` off the
-        centre (the rotors stay inside the mat's ring)."""
-        centre = np.asarray(centre, float)
+        struts, a rock) is within ``pad_need`` (rotor tips 0.29 m, the
+        touchdown error, and some of a rock's far side, which the camera
+        may not see), the nearest spot that clears it, at most
+        ``pad_reach`` off the centre (the rotors stay on the mat)."""
+        centre, need, reach = np.asarray(centre, float), self.cfg.pad_need, self.cfg.pad_reach
         floor = self.floor.floor_z
         clear = clearance(self.map.blocked(floor + 0.06, floor + 0.6), self.map.res)
         best, score = centre, -math.inf
