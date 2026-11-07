@@ -23,6 +23,7 @@ from pathlib import Path
 import numpy as np
 
 from drone_ref.course import read_obj
+from localsim import messy_frame as mf
 from localsim import messy_mesh as mm
 from localsim import messy_stand as ms
 
@@ -50,6 +51,13 @@ WINDOW_WALL_INSET = (0.03, 0.10)  # its south end this far inside the south net
 # eastern dividers stand further east. Everything can still move: offsets
 # from here are the severity-scaled jitter.
 SCAN_SHIFT = {'M2': (0.29, 0.), 'M3': (0.70, 0.)}
+# ...and turned from the CAD (degrees, counter-clockwise): M1 leans its free
+# (north) end east.
+SCAN_YAW = {'M1': -6.}
+# The barrier's panels as scanned, from the west net (degrees, counter-clockwise):
+# the first, behind the launch, rises toward M1; the second comes back down.
+BARRIER_TILT = (6., -2., 0.)
+BARRIER_WEST_Y = SCAN_BARRIER_Y - 0.10
 # Where each stands along the barrier, in joints (1.5: the middle of the second
 # panel). M1 at the end of the first short panel; A1, by the pad, about half a
 # short panel west of the second joint (team observation).
@@ -217,13 +225,13 @@ class Sampler:
         return groups, info
 
     def barrier(self, tunnel):
-        j0 = np.array([-NET + 0.02, SCAN_BARRIER_Y + self.u(-0.1, 0.1)])      # from just inside the west net
+        j0 = np.array([-NET + 0.02, BARRIER_WEST_Y + self.u(-0.1, 0.1)])      # from just inside the west net
         # As built, seen from the pad: two short panels from the west net (M1
         # stands on the maze side at the end of the first, A1 on the landing
         # side at the end of the second), then a long one, then one cut to the tunnel.
         joints = [j0]
-        for length in (self.panel['short'], self.panel['short'], self.panel['long']):
-            a = math.radians(self.u(-3, 3))
+        for length, tilt in zip((self.panel['short'], self.panel['short'], self.panel['long']), BARRIER_TILT):
+            a = math.radians(tilt + self.u(-3, 3))
             joints.append(joints[-1] + length * np.array([math.cos(a), math.sin(a)]))
         joints.append(tunnel['place_xy'](np.array([TUBE['cx'] - TUBE['hw'] + 0.04, BARRIER_Y])))
         walls = []
@@ -272,7 +280,7 @@ class Sampler:
             middle = (pivot + free) / 2
             nominal = np.array([math.sin(lean), -math.cos(lean)]) * np.linalg.norm(nominal)
             pivot = middle - nominal / 2
-        yaw = math.radians(self.u(-4, 4))
+        yaw = math.radians(SCAN_YAW.get(key, 0.) + self.u(-4, 4))
         direction = _rot(yaw) @ (nominal / np.linalg.norm(nominal))
         if host == 'barrier' and key in BARRIER_JOINT:
             k = BARRIER_JOINT[key]
@@ -500,7 +508,8 @@ def validate(course, radius=BODY_RADIUS + 0.05):
         if math.dist(rock['xy'], course.pad[:2]) - rock['radius'] < ROCK_CLEAR:
             problems.append('a rock beside the mat')
     # Nothing through the net, and the mat far enough in to land on.
-    inside = np.vstack([v for name, (v, t) in course.groups.items() if name != 'Floor' and len(t)])
+    inside = np.vstack([v for name, (v, t) in course.groups.items()
+                        if name != 'Floor' and not name.startswith('PVC net frame') and len(t)])
     if (inside[:, 0].max() > nets['east'] + 0.005 or -inside[:, 0].min() > nets['west'] + 0.005
             or inside[:, 1].max() > nets['north'] + 0.005 or -inside[:, 1].min() > nets['south'] + 0.005):
         problems.append('something through the net')
@@ -614,6 +623,7 @@ def _sample(seed, severity):
             normal = np.array([-(b - a)[1], (b - a)[0]])
             wall.tarp_side = 1 if (np.asarray(pad[:2]) - (a + b) / 2) @ normal > 0 else -1
         groups.update(wall_meshes(wall, rng, (sampler.panel['strut_top'], sampler.panel['strut_out'])))
+    groups.update(mf.centre_column())
     boulders = _place_boulders(sampler, groups, pad)
     groups['Floor'] = (np.array([[-NET, -NET, -0.01], [NET, -NET, -0.01], [NET, NET, -0.01], [-NET, NET, -0.01]]),
                        np.array([[0, 1, 2], [0, 2, 3]]))
@@ -622,6 +632,7 @@ def _sample(seed, severity):
     solid = np.vstack([v for name, (v, t) in groups.items() if name != 'Floor' and len(t)])
     reach = {'east': solid[:, 0].max(), 'west': -solid[:, 0].min(), 'north': solid[:, 1].max(), 'south': -solid[:, 1].min()}
     nets = {k: max(NET + sampler.u(-0.08, 0.08, False), float(reach[k]) + 0.02) for k in ('north', 'south', 'east', 'west')}
+    groups.update(mf.net_frame(nets))
     # The launch mark is taped in the middle of the first corridor (net to M1),
     # its CAD distance north of the barrier.
     m1 = next(w for w in walls if w.name == 'M1')

@@ -253,6 +253,7 @@ function run(THREE, OrbitControls, DATA) {
     paver: std({ map: paverTex, roughness: 1 }),
     wiremesh: std({ map: meshTex, color: 0x8c7a62, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, metalness: 0.6, roughness: 0.4 }),
     metal: std({ color: 0xb59a6a, metalness: 0.8, roughness: 0.35 }),
+    pvc: std({ color: 0xf2f2ee, roughness: 0.5 }),
     rock: std({ color: 0x8a3f2a, flatShading: true, roughness: 1 }),
     floor: std({ map: floorTex, roughness: 0.55 }),
     other: std({ color: 0xc9d1d9 }),
@@ -306,11 +307,7 @@ function run(THREE, OrbitControls, DATA) {
   const netGeo = new THREE.BufferGeometry();
   netGeo.setAttribute('position', new THREE.Float32BufferAttribute(netPts, 3));
   layer('net').add(new THREE.LineSegments(netGeo, new THREE.LineBasicMaterial({ color: 0x0a0a0a, transparent: true, opacity: 0.35 })));
-  const frameMat = std({ color: 0x2a2d31, metalness: 0.5 });
-  for (const [x, y] of [[-n.west, -n.south], [n.east, -n.south], [-n.west, n.north], [n.east, n.north]]) {
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, H + 0.3), frameMat);
-    pole.rotation.x = Math.PI / 2; pole.position.set(x, y, (H + 0.3) / 2); layer('net').add(pole);
-  }
+  // The PVC frame comes with the course geometry ('PVC' groups).
   // The hall: carpet, wood-panelled walls, ring chandeliers.
   const carpet = new THREE.Mesh(new THREE.PlaneGeometry(24, 24), std({ color: 0x2c2a2b }));
   carpet.position.z = -0.015; layer('net').add(carpet);
