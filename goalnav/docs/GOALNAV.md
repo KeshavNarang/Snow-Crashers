@@ -90,7 +90,8 @@ course per seed from the CAD's topology and photos of the event net:
     triangle reaching ~0.13 m out at flight height). Batten feet run on the
     floor with pavers on them.
   - **Placement** is what differs from the CAD: walls pivot where they meet the
-    barrier or the net, slide ±12 cm and turn ±4°.
+    barrier or the net, slide ±16 cm and turn ±5° (every placement offset is
+    1.3× the first estimate: the course has been rebuilt differently between visits).
   - **Barrier:** two long panels and one cut to the tunnel.
 - **As-built corrections from the team:**
   - **C1** leans the opposite way from the CAD, less steeply, narrowing the
