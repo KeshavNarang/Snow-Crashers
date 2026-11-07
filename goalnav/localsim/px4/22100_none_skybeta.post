@@ -1,0 +1,11 @@
+#!/bin/sh
+# shellcheck disable=SC2154
+# Telemetry the localsim bridge turns into the lab's px4_msgs topics.
+companion_port=$((14580+px4_instance))
+mavlink stream -u $companion_port -s HEARTBEAT -r 20
+mavlink stream -u $companion_port -s LOCAL_POSITION_NED -r 100
+mavlink stream -u $companion_port -s ATTITUDE_QUATERNION -r 100
+mavlink stream -u $companion_port -s EXTENDED_SYS_STATE -r 20
+mavlink stream -u $companion_port -s ESTIMATOR_STATUS -r 20
+mavlink stream -u $companion_port -s ODOMETRY -r 20
+mavlink stream -u $companion_port -s SYS_STATUS -r 5

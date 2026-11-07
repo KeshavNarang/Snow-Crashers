@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+.test-deps/
+build/
+install/
+log/
+*.egg-info/
+*.db3
+*.mcap
+*.ulg
+# No credentials belong in this project.
+.env
+*.pem
+*.key

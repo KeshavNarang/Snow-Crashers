@@ -1,0 +1,61 @@
+#!/bin/sh
+#
+# @name Sky Beta (DroneHacks), local simulator
+#
+# @type Quadrotor x
+#
+# Quad X geometry of localsim/rigidbody.py; every controller gain is the PX4
+# default. Simulator-only settings (estimator wiring, no RC/GPS/mag) are
+# below; never copy this file to the aircraft.
+#
+
+. ${R}etc/init.d/rc.mc_defaults
+
+# Geometry: motors 0.15 m from the centre (0.106 m along each body axis).
+param set-default CA_AIRFRAME 0
+param set-default CA_ROTOR_COUNT 4
+param set-default CA_ROTOR0_PX 0.106
+param set-default CA_ROTOR0_PY 0.106
+param set-default CA_ROTOR0_KM 0.05
+param set-default CA_ROTOR1_PX -0.106
+param set-default CA_ROTOR1_PY -0.106
+param set-default CA_ROTOR1_KM 0.05
+param set-default CA_ROTOR2_PX 0.106
+param set-default CA_ROTOR2_PY -0.106
+param set-default CA_ROTOR2_KM -0.05
+param set-default CA_ROTOR3_PX -0.106
+param set-default CA_ROTOR3_PY 0.106
+param set-default CA_ROTOR3_KM -0.05
+param set-default PWM_MAIN_FUNC1 101
+param set-default PWM_MAIN_FUNC2 102
+param set-default PWM_MAIN_FUNC3 103
+param set-default PWM_MAIN_FUNC4 104
+
+# Thrust about 4.5x weight: hover at 1 / 4.5 of full thrust (the tune's
+# value; the hover-thrust estimator refines it in flight).
+param set-default MPC_THR_HOVER 0.22
+
+# One simulated IMU, one EKF.
+param set EKF2_MULTI_IMU 0
+param set SENS_IMU_MODE 1
+param set IMU_GYRO_FFT_EN 0
+
+# Estimator as on the aircraft: cuVSLAM external vision only (position,
+# velocity, yaw; height reference vision), no GPS, no compass, no baro or
+# rangefinder fusion.
+param set-default EKF2_EV_CTRL 15
+param set-default EKF2_HGT_REF 3
+param set-default EKF2_GPS_CTRL 0
+param set-default EKF2_BARO_CTRL 0
+param set-default EKF2_RNG_CTRL 0
+param set-default EKF2_MAG_TYPE 5
+param set-default EKF2_EV_DELAY 40
+param set-default SYS_HAS_MAG 0
+param set-default SYS_HAS_GPS 0
+
+# Simulator only: no RC or ground station is connected.
+param set-default COM_RC_IN_MODE 4
+param set-default NAV_RCL_ACT 0
+param set-default COM_RCL_EXCEPT 4
+param set-default NAV_DLL_ACT 0
+param set-default SIM_BAT_DRAIN 600

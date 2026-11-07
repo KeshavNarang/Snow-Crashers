@@ -1,0 +1,285 @@
+﻿Source: https://dronehacks.groups.stanford.edu/connect/challenge
+Extracted from: DroneHacks Connect.html
+Snapshot supplied by user; not verified against live updates.
+
+DroneHacks Connect
+DroneHacksConnectPeopleScheduleSponsorsMessagesChallengeBadge
+Luke
+Stanford DroneHacks 2026 · Challenge
+The challengeThe drone
+The course
+Watch the course
+The course in 3D
+Checkpoints from above
+The challenge
+The mission
+The course
+Scoring
+Awards
+Timeline
+Rules
+1General
+2The kit
+3Hardware changes
+4Auxiliary sensors
+5Autonomy
+6Localization and mapping
+7The run
+8Safety
+9Software
+10Fair play
+The drone →
+The Challenge
+Program your drone to navigate an indoor obstacle course as quickly as possible, without GPS or pilot input.
+CourseIndoor, no GPS
+Score60 run · 40 judged
+AwardsFive awards · $15,000 total
+Scored runs closeSun 4:00 PM
+Watch the course
+A one-minute walkthrough of the course. The course is preliminary and may still change before the event.
+The course in 3D
+Drag to orbit; click in, then scroll to zoom. Tap a piece to see what it is.
+3D viewFrom above
+Hide the net
+The course fills a 20 × 20 ft drone net, 10 ft tall. Walls are 68 in tall and 4 in thick. Turn it around, look at it from above, and tap a wall, the tunnel or a boulder for its size.
+Download the courseOBJ + MTL (zip)STEPGLBIn metres. The OBJ and STEP are Z-up, the GLB Y-up.
+Course layout and dimensions are preliminary. Any changes will be published here and announced in Slack before scored runs open.
+Checkpoints from above
+Each shaded area is the stretch of course that leads to a checkpoint. Clear it by getting the whole drone across its dashed line; checkpoint 4 has two lines, Gate B and the window.
+LaunchTunneldark insideReturn bonus,over the barrierGate AGate BWindow123445Firstcorridor4 ptsMaze7 ptsTunnel10 ptsChicane7 ptsLanding7 pts048121620feetN
+1First corridorReach the end of the first corridor, where the line turns east.4
+2MazeLeave the maze where the line ends, through Gate A.7
+3TunnelCome out of the south end of the dark tunnel.10
+4ChicaneEnter the landing area through Gate B or the window, without landing.7
+5LandingLand and disarm with the whole drone inside the pad’s outer ring.7
+Checkpoint line: the whole drone crosses it
+Line on the floor through the maze
+The barrier; other walls in black. All walls are 68 in tall.
+Boulder, 18 in across
+The mission
+Every team gets the same drone: an NVIDIA Jetson Orin Nano, a Pixhawk 6C running PX4, a Luxonis OAK-D S2 depth camera and a downward Holybro VL53L1X rangefinder. Over the weekend, your team develops the software that flies it autonomously.
+On Sunday each team flies the competition course in the drone net. Nobody touches the controls: from the start command to the finish, the drone perceives the course, works out where it is, and plans its own way through.
+The course
+Fly these four stages in order, starting from the launch mark:
+1 · MazeNavigate the corridors. A line on the floor marks the route.
+2 · TunnelFly through the dark tunnel, the only way through the barrier.
+3 · ChicaneEnter the landing area through Gate B at the north end or through the window in the lower wall. The window route earns 5 extra points on a finished run.
+4 · LandingLand and disarm with the whole drone inside the pad’s outer ring.
+Indoors, in the drone net in Tresidder Oak. GPS/GNSS positioning is not permitted (rule 6.1).
+Bonus: after landing, take off again and fly back over the barrier to the launch mark (rule 7.10).
+Avoid contact with walls, the tunnel and boulders. Each touch adds a time penalty; a crash ends the run.
+Stay below the walls. Some part of the drone’s frame must always be below the top of the walls (68 in). A checkpoint reached by going over a wall or the barrier earns only 15% of its points (rule 7.7).
+The layout is shown above, in the walkthrough and the 3D model, with the size of each piece. It may change slightly before judging, so your drone still has to localize itself and react to what it sees.
+Using the layout
+You may build a map from the published layout and fly with it. Hard-coding the course is allowed too, but it costs generality points. What you may not do is store data from one run and feed it into a later one (rule 6.4). Any change to the course is posted here and announced in Slack before scored runs open.
+Scoring
+Every team is scored out of 100: 60 for the run, and 40 from the judges. The return bonus can take a team past 100.
+PartPointsWhat counts
+The run60
+How far your drone gets through the course, then how fast
+The technical presentation25
+Autonomy design, technical execution, originality, and evidence of testing and iteration
+Generality15
+How well your software would work on a different course
+Return bonus+25%
+Of your run points, for flying back over the barrier to the launch mark after landing
+Checkpoints. Five, cleared in order: (1) the drone takes off and reaches the end of the first corridor, where the line on the floor turns east; (2) it leaves the maze where the line ends; (3) it clears the tunnel; (4) it reaches the landing area, through Gate B or the window, without having landed; (5) it lands and disarms with the whole drone inside the pad’s outer ring. They are worth 4, 7, 10, 7 and 7 points.
+Time decides your place among teams that got as far. An unfinished run earns the points of the checkpoints it reached, plus up to 7 for speed: 7 × (fastest time to your last checkpoint ÷ your time to it). Clearing another checkpoint always earns more run points than completing fewer checkpoints faster. A run that reaches no checkpoint scores 0.
+A finished run earns its checkpoint points (35 when every checkpoint was flown below the walls), plus 20 × (fastest finish ÷ your time), plus 5 if it went through the window rather than Gate B. Every finish flown below the walls scores above every unfinished run.
+Over the walls. A checkpoint reached by going over a wall or the barrier earns 15% of its points (rule 7.7). A run that did this is never the fastest time others are compared with, and cannot win Fastest Run.
+The return bonus. A finished run that also completes the return (rule 7.10) earns its run points × 1.25.
+Times run from leaving the launch mark and include touch penalties (rule 7.8). Each is compared with the fastest time to the same checkpoint by any team, by either route.
+The technical presentation. A five- to seven-minute technical presentation explaining your system, key design decisions, and results, followed by questions from the judges. Judges consider how well you used any auxiliary sensors (rule 4.6).
+Generality. The judges score it from your answers and the code review (rule 9.5). Building a map from the published layout is a valid strategy; hard-coding the course is allowed but scores lower here.
+Ties are broken by the faster run time.
+Example
+The fastest finish is 60 s. A team that finishes in 90 s through Gate B earns 35 + 20 × 60/90 = 48.3 run points; through the window, 53.3; through the window and back over the barrier, 53.3 × 1.25 = 66.7. A team that reaches the landing area in 50 s, when the fastest to get there took 45 s, then crashes landing, earns 28 + 7 × 45/50 = 34.3. A team that only gets out of the maze, in 40 s against a fastest 30 s, earns 11 + 7 × 30/40 = 16.3.
+Awards
+AwardPrizeFor
+Rothberg Catalyzer Award$7,000
+For the team with the highest overall score.
+Runner-Up$3,000
+The second-highest combined score.
+Third Place$2,000
+The third-highest combined score.
+Most Technologically Impressive$2,000
+For the most impressive technical approach, judged on the technical presentation and generality scores alone: the autonomy stack, its novelty, and the engineering behind it.
+Fastest Run$1,000
+For the fastest finished run through the course, flown below the walls, touch penalties included.
+Note
+Prizes are awarded per team.
+Timeline
+Fri 4:45 PMHacking begins, at the end of the opening ceremony
+Fri 7:50 PMOak opens: flight-net safety briefing and kit pickup
+SaturdayBuild and practice in the nets
+Sat 7:30 PMScored-run blocks and presentation slots are posted in Slack
+Sat 10 PM – Sun 2 AMScored runs, in blocks
+Sun 8 AM – 4 PMScored runs, in blocks, then forfeited time. Scored runs close at 4 PM
+Sun 12:30 PMTeam repository links due
+Sun 12:30 – 3:10 PMTechnical presentations, two judge panels at once
+Sun 4:30 – 5:30 PMKit return
+Sun 6:00 PMClosing ceremony and awards, in Simonyi
+Note
+All times are Pacific Standard Time (PST). Flight-net access is subject to safety supervision and availability.
+The rulebook
+Rules
+What every team flies with, what you may change, and what counts as a fair, autonomous run.
+01General
+1.1
+These rules apply to every team from kit pickup on Friday to kit return on Sunday.
+1.2
+The DroneHacks 2026 Code of Conduct applies throughout. Breaking it can disqualify a team.
+1.3
+Organizers may clarify or amend these rules during the event. Every change is announced to all teams in Slack and here, with the time it takes effect.
+1.4
+If something is not covered, ask an organizer before you do it. Anything against the spirit of the challenge, autonomous GPS-denied flight on the issued drone, is not allowed.
+1.5
+The head judge's decisions on scoring, penalties and disqualification are final.
+02The kit
+2.1
+Each team is issued one drone kit, signed out by the team captain at kit pickup. The captain is responsible for it until it is checked back in.
+2.2
+The kit stays the property of the organizers and is returned complete between 4:30 and 5:30 PM on Sunday.
+2.3
+The issued drone is the only aircraft a team may fly, in practice and in judging.
+2.4
+Propellers and batteries are issued by the organizers. Use only those.
+2.5
+Report damage or a fault to an organizer straight away. Replacement parts are issued at the organizers' discretion, and broken parts are handed back.
+03Hardware changes
+3.1
+The core kit stays on the drone and in use: the frame, motors, ESCs, propellers, power system, Jetson Orin Nano, Pixhawk 6C, OAK-D S2 and VL53L1X rangefinder. None of it may be removed, replaced or bypassed.
+3.2
+You may re-mount parts, for example move or re-angle the camera or the rangefinder, or print a new bracket, as long as the drone passes inspection again (rule 8.4).
+3.3
+You may not change the motors, ESCs, propellers, battery or power wiring.
+3.4
+You may add auxiliary sensors under rule 4. Nothing else that draws power may be added.
+3.5
+No additional computers. A microcontroller used only to read an auxiliary sensor counts as part of that sensor (rule 4.4).
+3.6
+All added components must be securely attached. Nothing may come loose in flight.
+04Auxiliary sensors
+4.1
+Teams may add auxiliary sensors to the drone. Each must have a market value under US$100 and weigh under 50 g.
+4.2
+Market value is the usual retail price of the same sensor bought new from its manufacturer or a mainstream retailer at the time of the event. It is not what your team paid: a sensor you were given, lent, or bought at a discount is valued at its market price.
+4.3
+Mass is the sensor as sold, including its board, enclosure and lens, weighed by an organizer. Cables and mounting hardware are not counted.
+4.4
+Anything a sensor needs to work, such as a breakout board or a microcontroller that reads it, counts toward that sensor's value and mass.
+4.5
+Declare every auxiliary sensor at inspection before it flies: its part number, a link to a listing that shows its market price, and its mass. An undeclared sensor may not fly.
+4.6
+Auxiliary sensors earn nothing just by being on the drone. In the technical presentation, the judges consider how well a team used them.
+4.7
+Auxiliary sensors are powered from the drone's own battery. No additional batteries.
+4.8
+Not allowed at any price: GNSS receivers (GPS and the like); anything that relies on equipment placed off the drone, such as UWB anchors, beacons or motion capture; and lasers above Class 1.
+Example
+A sensor that lists at $129 but that your team got free from a sponsor is over the limit: what counts is the $129.
+05Autonomy
+5.1
+A scored run is fully autonomous. From the start command until the run ends, nobody may influence the drone's flight except to abort it.
+5.2
+Teams may send one start command per run. After that, the only permitted commands are abort commands (kill or land).
+5.3
+No remote-control inputs, joysticks, waypoints, mode changes or parameter changes during a run. An RC transmitter, if used, is for the kill switch only.
+5.4
+All perception, localization, planning and control run on the drone: the Jetson, the Pixhawk and declared auxiliary sensors. No laptop, server or cloud service may be in the loop.
+5.5
+A laptop may stay connected to watch telemetry, video and logs, read-only. After the start command, no external device may send commands that affect flight, except an abort command.
+5.6
+Wireless links on the drone carry only the start command, abort and read-only monitoring.
+06Localization and mapping
+6.1
+No GNSS (GPS, GLONASS, Galileo, BeiDou), even as a fallback. PX4's GNSS input stays disabled.
+6.2
+No external positioning: no motion capture, UWB, Wi-Fi or Bluetooth ranging, beacons, lights or markers, unless the organizers provide them as part of the course.
+6.3
+Teams may not place, move, mark or alter anything in or around the course, in practice or in judging.
+6.4
+Maps are allowed; run data is not. You may preload a map, including one built from the published layout. You may not collect data on the course during one run, practice or scored, and store it as a direct input to a later run: for example, a Gaussian splat, point cloud or map captured on a practice run or your first run and fed to the next, or a replay of a recorded flight. Tuning your code from what you learned is fine.
+07The run
+7.1
+Every team gets the same scored net time, in two equal blocks: one in the first half of scored runs and one in the second half, with a 1.5-minute changeover between teams. Scored runs are Saturday 10 PM – 2 AM and Sunday 8 AM – 4 PM. Blocks, their length and their order are posted at 7:30 PM on Saturday, placed around each team’s presentation slot.
+7.2
+Fly as many runs as fit in your blocks. Your best run counts. A block starts on time whether or not you are ready, so be at the net with the drone charged 10 minutes before. A run still in the air when the block ends is stopped and scored on the checkpoints it has cleared.
+7.3
+Forfeiting. If something fails beyond a quick fix, a team may forfeit the rest of a block. The remaining time, less a 1.5-minute changeover, is added after Sunday’s final scheduled block, in the order teams forfeited, until scored runs close at 4:00 PM. Time that does not fit is lost, and recovered time cannot be forfeited again.
+7.4
+Before each run the drone is placed on the launch mark, armed by the team in the referee's presence, and started on the referee's signal.
+7.5
+The clock starts when the drone leaves the launch mark and stops when it disarms on the pad, or when the run ends. Every run is filmed from above, and checkpoint times are read from the video.
+7.6
+Checkpoints count only in order, and only once the whole drone has passed. A run that skips one is scored up to the last checkpoint before it.
+7.7
+Stay below the walls. Some part of the drone’s frame must always be below the top of the walls (68 in), except on the return (rule 7.10). A checkpoint reached by flying over a wall or the barrier, anywhere since the checkpoint before it, earns only 15% of its points.
+7.8
+Each touch of a wall, the tunnel or a boulder that does not end the run adds 5 seconds, to the finish time and to every later checkpoint time.
+7.9
+A run ends when the drone disarms on the pad without attempting the optional return (rule 7.10), crashes, touches the ground anywhere else, leaves the course, reaches the 3-minute limit, is aborted by the team, or is stopped by the referee.
+7.10
+The return. After disarming on the pad, the drone may take off again by itself, fly over the barrier into the start area, and land and disarm within 2 ft of the launch mark, all inside the 3-minute limit, with no input from the team. The run ends when the return does. A crash or a miss on the return loses only the bonus, never the run.
+7.11
+Any human input other than abort ends the run. Checkpoints cleared before it still count.
+7.12
+The referee's times, checkpoint count and route through the chicane are official. Teams may film their own runs.
+08Safety
+8.1
+Everybody who handles or flies the drone attends the flight-net safety briefing. Nobody flies before it.
+8.2
+Fly only inside the drone net, with the net closed. Never arm the drone anywhere else, and take the propellers off to work on it at your table.
+8.3
+During every flight, a designated team member must watch the drone and be ready to activate the kill switch. The referee or any organizer can order a kill at any time: do it at once.
+8.4
+The drone must pass an organizer inspection before its first flight and after any hardware change: propellers secure, battery strapped, wiring tidy, kill switch working, auxiliary sensors declared.
+8.5
+Do not change the PX4 safety settings the organizers configured: failsafes, the kill switch, the geofence and battery limits.
+8.6
+Use only issued batteries and charge them only at the charging station. Never leave a battery charging unattended, and hand a swollen or damaged battery to an organizer straight away.
+8.7
+Net time is shared. Follow the organizers' queue; one drone flies in the net at a time unless organizers say otherwise.
+8.8
+A team that flies unsafely can be stopped from flying, for a time or for the rest of the event.
+09Software
+9.1
+Your autonomy stack is built during the event. Open-source libraries, pretrained models, public datasets and the organizers' starter project are allowed: credit them in your README and your technical presentation.
+9.2
+AI coding tools are allowed and encouraged, but every team must be able to show how its software works.
+9.3
+Submit your team repository link by 12:30 PM on Sunday. Everything you fly must be pushed to it by 4:00 PM on Sunday, when scored runs close; it does not have to be pushed before each run.
+9.4
+Your repository includes a README that explains how your stack works and how to run it.
+9.5
+Once the links are due, every repository is screened by an AI code review, with the same instructions for every team, for hard-coding specific to the competition layout, such as fixed waypoints, routes or timings. Its flags go to the judges, who ask the team about them and weigh them in the generality score. The review does not award or take away points by itself.
+10Fair play
+10.1
+Teams may help each other and talk ideas through. Each team's code and technical presentation are its own work: copying another team's code is not allowed.
+10.2
+Do not interfere with another team's drone, laptop, network or radio link: no jamming, no deauthentication, no connecting to their Jetson.
+10.3
+Do not tamper with the course, the timing, or the organizers’ equipment.
+10.4
+Misstating an auxiliary sensor’s price or mass, flying undeclared hardware, or flying code that is not in your team repository by 4:00 PM on Sunday is cheating.
+10.5
+Penalties are decided by the head judge, in proportion to the breach: a time penalty, a run scored as not finished, a run disqualified, or the team disqualified from awards.
+10.6
+Report a suspected breach to an organizer, privately.
+Next: the drone →
+Stanford DroneHacks 2026 · November 6–8, 2026hello@stanfordhorizons.com
+PeopleScheduleSponsorsMessagesChallengeBadgeMe
+
+LINKS (signed download links may expire)
+https://dronehacks.groups.stanford.edu/connect
+https://dronehacks.groups.stanford.edu/connect/badge
+https://dronehacks.groups.stanford.edu/connect/challenge
+https://dronehacks.groups.stanford.edu/connect/challenge/drone
+https://dronehacks.groups.stanford.edu/connect/messages
+https://dronehacks.groups.stanford.edu/connect/profile
+https://dronehacks.groups.stanford.edu/connect/schedule
+https://dronehacks.groups.stanford.edu/connect/sponsors
+https://storage.googleapis.com/ddron-f5e1a.firebasestorage.app/challenge/course-v3.glb?GoogleAccessId=firebase-adminsdk-fbsvc%40ddron-f5e1a.iam.gserviceaccount.com&Expires=1793711496&Signature=Y9A4iBTc79wcTMKjEPzpB1%2F2sJYeEx9RQ4oheqov4PQb2UvEjYmLo8HvFT8Rw51tJ5mEEI4VL%2FONu6mSN83RfMJo2Ig1YVI2w4sv5DsB%2F8cenkSLoVz7soUEmNKFtERsC8zonni4L9D5gmEle64CDA5O09AA2YI96IZw3bCknRz9gOpR09H1bjAJ12T1uiVoUozl8xNmzywTCMQkH8XgLGSD3M%2F8qlweChecn%2B7ne9lQUaPgq7n%2BipN7ytZdNgagsiU3heFFXpwPde3IJtpYCRS%2B%2F700S%2FAey4fw8WAd%2FIO8MePip4KJ36UDW32ofMHC5%2BBpbpVZ%2FsfQUhGN0si%2FSg%3D%3D&response-content-disposition=attachment%3B%20filename%3D%22dronehacks-course-v3.glb%22
+https://storage.googleapis.com/ddron-f5e1a.firebasestorage.app/challenge/downloads/dronehacks-course-v3.step?GoogleAccessId=firebase-adminsdk-fbsvc%40ddron-f5e1a.iam.gserviceaccount.com&Expires=1793711496&Signature=f%2B%2F6g3U4YxXMM%2Bp8iAZi25aJCWSHRJt4VRVy7hfJnDyOmoSJPG%2BE%2BglhpR6cncUxmUMAJa2AtUZth6Ucm3M0xHJQl6IwwOmb%2FgKysyyjLKLytKZoFgaIsEs0%2FwG4x%2B6okRt7N%2FXZhJYRFSZYWgbcWgwPcZWUDLkaZAVUb6275zcIFDLbuyR7HQwUhR%2FxMmsDtSjzxaVLnx2HlOHCZ%2FPFMO2ckIeMWTgEdOdpCe%2Bw%2BlV27PxLa6uJa2HVdhEveiVwsASbjcjuCtxOxtk%2B9tszsnlABIIzByiaoxNQTkbh%2BsS3sJAykOvjnjRDXsjsdgVNCplZyfhB4Zhci81Zl868jw%3D%3D&response-content-disposition=attachment%3B%20filename%3D%22dronehacks-course-v3.step%22
+https://storage.googleapis.com/ddron-f5e1a.firebasestorage.app/challenge/downloads/dronehacks-course-v3-obj.zip?GoogleAccessId=firebase-adminsdk-fbsvc%40ddron-f5e1a.iam.gserviceaccount.com&Expires=1793711496&Signature=W6S2KG8ZojP%2BuDTNqBj7btciGD%2BEsXdzl6pjQdxCFgKrsDqYKkfsrCthvv7WmQVQiHjIZ4CkXJVJEP1uLoekntqU2IwBFWc2I8RdbbrB0kRa1MtDy7gqUqIkRHZP54RzGMw%2FMK0fgu1ZQCT9ZfYscLleQy5wqMK7GTO0cxqOwm09WAZq31eV1gQLDTmwp2nYliRVDnRBCL6U2Du7w823r61hpQ0IX7fpf9M%2FPnXaiXYceG%2BgiOWYFKTOkDofm1jNLNtf6kbG0temfzpCublgWVOMpzm9Stb6DvKynF%2FN0hupOxxzqtG3S%2Fg5qaQ401NxnODfU7v8SSHjQfslIqKD9g%3D%3D&response-content-disposition=attachment%3B%20filename%3D%22dronehacks-course-v3-obj.zip%22
+mailto:hello@stanfordhorizons.com

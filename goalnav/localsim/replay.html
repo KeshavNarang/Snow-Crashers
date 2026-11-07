@@ -1,0 +1,116 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Local sim replay</title>
+<style>
+  :root { --bg-card: var(--card, #1b1b1f); --fg: var(--foreground, #e8e8ea); --mut: var(--muted-foreground, #9a9aa3);
+          --bd: var(--border, #33333a); --wall: var(--muted, #3a3a42); --plan: var(--muted-foreground, #9a9aa3);
+          --cp: var(--destructive, #d9534f); --pad: var(--success, #3fb27f); --drone: var(--primary, #6ea8fe); }
+  body { margin: 0; font-family: var(--font-sans, system-ui, sans-serif); color: var(--fg); }
+  .wrap { display: flex; flex-direction: column; gap: 10px; }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+  .stat { display: flex; flex-direction: column; min-width: 78px; }
+  .stat b { font-size: 18px; font-variant-numeric: tabular-nums; font-family: var(--font-mono, monospace); }
+  .stat span { color: var(--mut); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  canvas { width: 100%; height: auto; border-radius: var(--radius, 8px); background: var(--bg-card); display: block; }
+  button { font: inherit; padding: 4px 12px; border-radius: var(--radius, 6px); border: 1px solid var(--bd);
+           background: transparent; color: var(--fg); cursor: pointer; }
+  input[type=range] { flex: 1; min-width: 160px; }
+  .legend { color: var(--mut); font-size: 12px; }
+  .chip { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 4px 0 10px; vertical-align: -1px; }
+</style></head>
+<body><div class="wrap">
+  <div class="row">
+    <div class="stat"><b id="t">0.0</b><span>time s</span></div>
+    <div class="stat"><b id="v">0.00</b><span>speed m/s</span></div>
+    <div class="stat"><b id="z">0.00</b><span>height m</span></div>
+    <div class="stat" style="min-width:110px"><b id="s">IDLE</b><span>mission state</span></div>
+    <div class="stat"><b id="cp">0/5</b><span>checkpoints</span></div>
+  </div>
+  <canvas id="c" width="1220" height="1220"></canvas>
+  <div class="row">
+    <button id="play">Pause</button>
+    <button id="speed">2×</button>
+    <input id="seek" type="range" min="0" max="1000" value="0">
+  </div>
+  <div class="legend" id="legend"></div>
+</div>
+<script>
+const D = /*DATA*/null;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const C = document.getElementById('c'), g = C.getContext('2d');
+const S = C.width / 6.3, H = 3.15;
+const px = (x, y) => [(x + H) * S, (H - y) * S];
+const T = D.trace, t0 = T[0][0], t1 = T[T.length - 1][0];
+const ref = D.referee.centre, cps = ref.checkpoint_times_s;
+const leftAt = (T.find(r => r[6] === 'TAKEOFF') || T[0])[0];
+document.getElementById('legend').innerHTML =
+  `<span class="chip" style="background:${css('--wall')}"></span>map (inflated by body + margin)` +
+  `<span class="chip" style="background:${css('--plan')}"></span>plan` +
+  `<span class="chip" style="background:${css('--cp')}"></span>checkpoint lines` +
+  `<span class="chip" style="background:${css('--pad')}"></span>landing ring` +
+  ` · trail colour = speed (blue slow → red 1.2 m/s) · result: ${D.final[0]}, ` +
+  (ref.checkpoints === 5 ? `finished in ${ref.elapsed_s.toFixed(1)} s via ${ref.route}` : `${ref.checkpoints} checkpoints`);
+
+const base = document.createElement('canvas'); base.width = C.width; base.height = C.height;
+(function drawBase() {
+  const b = base.getContext('2d'), G = D.grid;
+  b.fillStyle = css('--wall');
+  for (const [cx, cy, n] of G.runs) {
+    const [x, y] = px(G.origin[0] + cx * G.res, G.origin[1] + (cy + 1) * G.res);
+    b.fillRect(x, y, n * G.res * S + .5, G.res * S + .5);
+  }
+  b.strokeStyle = css('--pad'); b.lineWidth = 3;
+  const [qx, qy] = px(D.pad.x, D.pad.y); b.beginPath(); b.arc(qx, qy, D.pad.radius_m * S, 0, 7); b.stroke();
+  b.setLineDash([10, 7]); b.strokeStyle = css('--cp'); b.lineWidth = 4;
+  for (const l of D.lines) {
+    const [a, c] = [px(...l.start), px(...l.end)];
+    b.beginPath(); b.moveTo(...a); b.lineTo(...c); b.stroke();
+    b.fillStyle = css('--cp'); b.font = '600 22px sans-serif'; b.fillText(l.label, a[0] + 6, a[1] - 6);
+  }
+  b.setLineDash([6, 6]); b.strokeStyle = css('--plan'); b.lineWidth = 2; b.beginPath();
+  D.plan.forEach((p, i) => i ? b.lineTo(...px(...p)) : b.moveTo(...px(...p))); b.stroke(); b.setLineDash([]);
+})();
+
+const colour = v => { const f = Math.max(0, Math.min(1, v / 1.2));
+  return `hsl(${220 - 220 * f}, 80%, ${55 - 5 * f}%)`; };
+let i = 0, playing = true, rate = 2, last = null;
+function frame(k) {
+  g.clearRect(0, 0, C.width, C.height); g.drawImage(base, 0, 0);
+  g.lineWidth = 6; g.lineCap = 'round';
+  for (let j = 1; j <= k; j++) {
+    g.strokeStyle = colour(T[j][4]); g.beginPath(); g.moveTo(...px(T[j - 1][1], T[j - 1][2]));
+    g.lineTo(...px(T[j][1], T[j][2])); g.stroke();
+  }
+  const r = T[k], [x, y] = px(r[1], r[2]);
+  g.fillStyle = css('--drone') + '33'; g.strokeStyle = css('--drone'); g.lineWidth = 3;
+  g.beginPath(); g.arc(x, y, D.radius * S, 0, 7); g.fill(); g.stroke();
+  g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(r[5]) * D.radius * S * 1.4, y - Math.sin(r[5]) * D.radius * S * 1.4);
+  g.lineWidth = 5; g.stroke();
+  if (r[7]) { g.strokeStyle = css('--cp'); g.beginPath(); g.arc(x, y, D.radius * S + 8, 0, 7); g.stroke(); }
+  const flown = r[0] - leftAt;
+  document.getElementById('t').textContent = Math.max(0, flown).toFixed(1);
+  document.getElementById('v').textContent = r[4].toFixed(2);
+  document.getElementById('z').textContent = r[3].toFixed(2);
+  document.getElementById('s').textContent = r[6];
+  const done = cps.filter(c => c <= flown).length + (ref.checkpoints === 5 && r[6] === 'COMPLETE' ? 1 : 0);
+  document.getElementById('cp').textContent = `${done}/5`;
+  document.getElementById('seek').value = Math.round(1000 * k / (T.length - 1));
+}
+function loop(now) {
+  if (playing && last !== null) {
+    const target = T[i][0] + (now - last) / 1000 * rate;
+    while (i < T.length - 1 && T[i + 1][0] <= target) i++;
+    if (i >= T.length - 1) { i = T.length - 1; playing = false; document.getElementById('play').textContent = 'Replay'; }
+  }
+  last = now; frame(i); requestAnimationFrame(loop);
+}
+document.getElementById('play').onclick = e => {
+  if (i >= T.length - 1) i = 0;
+  playing = !playing; e.target.textContent = playing ? 'Pause' : 'Play';
+};
+document.getElementById('speed').onclick = e => { rate = rate === 2 ? 5 : rate === 5 ? 1 : 2; e.target.textContent = rate + '×'; };
+document.getElementById('seek').oninput = e => { i = Math.round(e.target.value / 1000 * (T.length - 1)); playing = false;
+  document.getElementById('play').textContent = 'Play'; };
+const params = new URLSearchParams(location.search);
+if (params.has('at')) { i = Math.round(Number(params.get('at')) * (T.length - 1)); playing = false; }
+requestAnimationFrame(loop);
+</script></body></html>

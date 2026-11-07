@@ -1,0 +1,116 @@
+﻿Source: https://dronehacks.groups.stanford.edu/connect/challenge/drone
+Extracted from: DroneHacks Connect 2.html
+Snapshot supplied by user; not verified against live updates.
+
+DroneHacks Connect
+DroneHacksConnectPeopleScheduleSponsorsMessagesChallengeBadge
+Luke
+Stanford DroneHacks 2026 · Challenge
+The challengeThe drone
+Sky Beta
+Every team flies the same drone, built, configured and flight-tested before you arrive. The hardware is the same for everybody, so the competition is in the code.
+Layers apart
+Put togetherSpinReset
+Drag to orbit, click in and scroll (or pinch) to zoom, and click a part to read about it.
+02 · Thinking
+Jetson Orin Nano
+Companion computer
+The drone’s high-level computer, where your code runs. It reads the camera, works out a path and decides the next movement to ask the Pixhawk for.
+Takes inImages and depth from the camera; flight state from the Pixhawk.
+Sends outWhere to go next, as position or velocity targets, to the Pixhawk.
+The Jetson decides where to go. The Pixhawk makes the fast corrections that keep the drone stable on the way.
+Hardware reference ↗
+01Camera02Jetson03Pixhawk04ESC05Motors06Battery07Airframe
+From light to lift
+Follow one decision through the drone
+▶ Play the tour
+01CameraSee the scene
+02JetsonPlan the motion
+03PixhawkKeep it stable
+04ESCDrive the motors
+05MotorsMake thrust
+The camera sees, the Jetson plans, the Pixhawk keeps the drone stable, the ESC drives the motors. The lines show what talks to what, not the wiring.
+CAD for your own parts
+Designing a mount or bracket? STEP of the drone as assembled, the OAK-D mount as an STL, in millimetres with +Z up. Rules 3 and 4 say what you may add or re-mount.
+Download the CAD · ZIP, 15 MB
+The parts you program
+Four parts matter to your code. The VL53L1X rangefinder under the drone is not in the model above: it points down and tells you the height.
+NVIDIA · Onboard compute
+Jetson Orin Nano 8GB
+The autonomy computer. Everything you write runs here.
+GPU1024-core NVIDIA Ampere, 32 tensor cores
+CPU6-core Arm Cortex-A78AE, 64-bit
+Memory8 GB 128-bit LPDDR5, 68 GB/s
+AI throughput40 TOPS INT8 (67 TOPS in Super mode)
+NVIDIA Jetson Orin documentation ↗
+Holybro · Flight control
+Pixhawk 6C
+Flight controller. Attitude, rates, and the safety envelope.
+MCUSTM32H743, Arm Cortex-M7 at 480 MHz
+Memory2 MB flash, 1 MB RAM
+IMUICM-42688-P and BMI055, dual redundant
+BarometerBMP388
+PX4 Pixhawk 6C reference ↗
+Luxonis · Perception
+OAK-D S2
+Stereo depth and on-device inference in one unit.
+Colour sensor12 MP Sony IMX378, 4056 × 3040
+Stereo pair2 × 1 MP global shutter mono
+On-board VPUIntel Movidius Myriad X, 4 TOPS
+DepthMetric stereo depth, ~0.35 m and beyond
+Luxonis DepthAI documentation ↗
+Holybro · Ranging
+ST VL53L1X Lidar
+Downward time-of-flight rangefinder for height above the floor.
+RangeUp to 4 m, less in bright light
+Update rateUp to 50 Hz
+Field of view27°, narrower with a programmable region of interest
+Mass2.4 g
+PX4 rangefinder setup ↗
+Programming it
+Every drone arrives ready to fly. PX4 is flashed and tuned, and the Jetson has ROS 2 and the camera libraries installed. We give you the libraries and a flying starter project, so you spend the weekend on autonomy, not on toolchains.
+01
+Write it on the Jetson
+Your code runs on the Jetson Orin Nano as ROS 2 nodes. Try it in simulation on your laptop first.
+02
+See with the camera
+The OAK-D S2 computes depth on the camera itself. Its ROS 2 topics give you color, depth and detections.
+03
+Fly through PX4
+Send position or velocity setpoints to PX4 in offboard mode, and read back where the drone thinks it is.
+04
+Start from the starter project
+A flying baseline: an offboard control node, a depth-to-obstacle example, launch files and a Gazebo simulation.
+What is installed
+PX4 Autopilot
+Pixhawk 6C
+Stock firmware, pre-flashed and tuned for the airframe.
+ROS 2 Humble
+Jetson Orin Nano
+Pre-installed with the PX4 messages and a bridged uXRCE-DDS agent.
+DepthAI + depthai-ros
+Jetson Orin Nano
+Camera pipelines and ROS 2 topics for RGB, depth, and detections.
+Starter repository
+Your laptop and the Jetson
+A flying baseline: offboard control node, a depth-to-obstacle example, launch files, and a Gazebo simulation target.
+← The challenge
+Stanford DroneHacks 2026 · November 6–8, 2026hello@stanfordhorizons.com
+PeopleScheduleSponsorsMessagesChallengeBadgeMe
+
+LINKS (signed download links may expire)
+https://developer.nvidia.com/embedded/jetson-orin
+https://docs.luxonis.com/
+https://docs.nvidia.com/jetson/orin-nano-devkit/user-guide/latest/index.html
+https://docs.px4.io/main/en/flight_controller/pixhawk6c.html
+https://docs.px4.io/main/en/sensor/rangefinders.html
+https://dronehacks.groups.stanford.edu/connect
+https://dronehacks.groups.stanford.edu/connect/badge
+https://dronehacks.groups.stanford.edu/connect/challenge
+https://dronehacks.groups.stanford.edu/connect/challenge/drone
+https://dronehacks.groups.stanford.edu/connect/messages
+https://dronehacks.groups.stanford.edu/connect/profile
+https://dronehacks.groups.stanford.edu/connect/schedule
+https://dronehacks.groups.stanford.edu/connect/sponsors
+https://dronehacks.groups.stanford.edu/drone/sky-beta-cad.zip
+mailto:hello@stanfordhorizons.com
