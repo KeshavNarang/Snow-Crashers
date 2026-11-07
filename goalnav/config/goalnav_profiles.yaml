@@ -1,0 +1,54 @@
+# Risk profiles for drone_ref.goalnav (docs/GOALNAV.md). Pick one with the
+# node's `profile` parameter (localsim: --profile); override single values
+# with `tuning` (localsim: --tune key=value). Every key is a field of
+# MissionConfig, PlanConfig or FollowConfig.
+#
+# Clearances are from the drone's centre; its footprint radius is 0.28 m.
+#   radius       preferred clearance: planned closer only where a passage is narrower
+#   hard_radius  never planned closer (only to back away from where it is)
+#   soft         clearance below which a path costs more (keeps to the middle)
+#   net_margin   extra keep-out inside the expected net (the net is nearly invisible)
+# Speeds are m/s; kind_speed caps the speed passing each kind of goal.
+#   speed_caps   apply the turn and per-kind caps (off: only braking on seen free space limits speed)
+#   corner_guard pull toward the path's line (off: pure pursuit, which cuts inside corners)
+
+safe:                     # reliability first: the run that must finish
+  cruise_height: 1.15     # over the stands' struts; below the 1.73 m wall tops
+  max_speed: 0.6
+  radius: 0.42
+  hard_radius: 0.33       # body + 5 cm: the map is a few cm off a real tarp
+  soft: 0.80
+  soft_weight: 12.
+  net_margin: 0.08       # the net is invisible: a bigger keep-out than any wall
+  turn_speed: 0.25
+  braking: 1.4
+  reaction_s: 0.3
+  kind_speed: {tube: 0.35, opening: 0.2, gap: 0.35, reach: 0.2, pad: 0.4}   # reach: the dead end by the net, overshoot < 5 cm
+  repel_reach: 0.44
+  repel_gain: 2.5
+  max_accel: 1.5
+  cross_track_gain: 1.5
+
+normal:                   # a middle setting
+  cruise_height: 1.10
+  max_speed: 1.3
+  radius: 0.35
+  hard_radius: 0.30
+  soft: 0.65
+  net_margin: 0.10
+  turn_speed: 0.45
+  braking: 2.2
+  kind_speed: {tube: 0.55, opening: 0.35, gap: 0.6, pad: 0.6}
+  repel_reach: 0.42
+
+fast:                     # a scored attempt once a safe run is banked
+  cruise_height: 1.05
+  max_speed: 1.8
+  radius: 0.33
+  hard_radius: 0.29
+  soft: 0.6
+  net_margin: 0.08
+  turn_speed: 0.6
+  braking: 2.8
+  kind_speed: {tube: 0.7, opening: 0.4, gap: 0.8, pad: 0.7}
+  repel_reach: 0.40
