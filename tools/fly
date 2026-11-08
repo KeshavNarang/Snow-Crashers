@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # One command per stage to fly goalnav on OUR drone (skybeta-03). Plain steps: FLYING.md.
-#   tools/fly deploy "<your name>"   lock, copy goalnav + scripts, pick the goalnav mission (asks sudo)
+#   tools/fly camera "<your name>"   lock, copy the team camera config (rgbd: colour + on-camera depth) and
+#                                    build the team image on the drone (no restart; power-cycle to use it)
+#   tools/fly deploy "<your name>" [cheese]   lock, copy goalnav + scripts, pick the goalnav (or cheese) mission
 #                                    -> then power-cycle the drone (battery out 10 s, in, wait ~3 min)
 #   tools/fly check                  pre-flight (props off, on the launch mark) + goalnav status
 #   tools/fly logs                   copy the newest flight log folder to ./flight-logs/
@@ -17,8 +19,10 @@ host=$("$d" run hostname)
 in_stack() { "$d" run "docker exec skybeta-stack bash -c \"source skybeta_env.sh >/dev/null 2>&1; $1\""; }
 case "${1:-}" in
   deploy)
-    who="${2:?usage: tools/fly deploy \"<your name>\"}"
-    "$root/tools/drone-lock" acquire "$who" "goalnav flight test"
+    who="${2:?usage: tools/fly deploy \"<your name>\" [cheese]}"
+    launch="${3:-goalnav}.launch.py"
+    [ -f "goalnav/launch/$launch" ] || { echo "no goalnav/launch/$launch"; exit 2; }
+    "$root/tools/drone-lock" acquire "$who" "goalnav flight test ($launch)"
     "$d" run 'mv ~/team_ws/src/drone_ref ~/drone_ref.prev-$(date +%Y%m%d-%H%M%S) 2>/dev/null; true'
     "$d" push goalnav '~/team_ws/src/drone_ref'
     "$d" push team_ws/run_mission.sh '~/team_ws/run_mission.sh'
@@ -26,9 +30,18 @@ case "${1:-}" in
     "$d" run 'chmod +x ~/team_ws/run_mission.sh ~/team_ws/preflight.sh'
     echo "== build check (about a minute)"
     in_stack "team_build.sh --packages-select drone_ref"
-    echo "== choosing the goalnav mission (sudo password = the login password)"
-    "$d" runt '~/team_ws/run_mission.sh drone_ref goalnav.launch.py'
+    echo "== choosing the mission drone_ref/$launch (sudo password = the login password)"
+    "$d" runt "~/team_ws/run_mission.sh drone_ref $launch"
     echo; echo "NOW: power-cycle the drone (battery out 10 s, in), wait ~3 min, then: tools/fly check" ;;
+  camera)
+    who="${2:?usage: tools/fly camera \"<your name>\"}"
+    "$root/tools/drone-lock" acquire "$who" "team camera image (rgbd)"
+    "$d" run 'mkdir -p ~/team_ws/camera'
+    "$d" push team_ws/camera/oakd_vslam.yaml '~/team_ws/camera/oakd_vslam.yaml'
+    "$d" push team_ws/Dockerfile '~/team_ws/Dockerfile'
+    echo "== building the team image (the running stack is not touched)"
+    "$d" run '~/skybeta/host/run.sh build'
+    echo; echo "NOW: power-cycle the drone, wait ~3 min; tools/fly check must show camera pipeline PASS (rgbd)" ;;
   check)
     "$d" run '~/team_ws/preflight.sh' || true
     echo "== goalnav status (10 s)"
