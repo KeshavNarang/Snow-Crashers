@@ -65,3 +65,59 @@ but 16 seeds can't show 99 % (16/16 is consistent with ~85 %), and A's worst run
    repel_reach=0.50`, ~10 min on 32 cores).
 3. The return's descent onto the launch mark touches in a third of runs: look at that leg
    (it is flown blind, the camera faces ahead).
+
+## Session 2 (19:15-19:55): drone-measured sims, batch fixes, a faster ray march, sim-to-real
+
+Branch rebased onto `main` 607b851 (calibration fix); course = `main`'s (no ladder, old maze).
+
+### What the sim now assumes (`goalnav/localsim/drone_measured.yaml`)
+`--scenario drone` = depth 4.0 Hz, 234 ms old (goalnav stereo_node, 2 threads, measured
+2026-11-07); `drone_slow` 2.8 Hz / 0.4 s; `drone_drift` x2 odometry drift (not measured);
+`sim_default` = goalrun's own 4.5 Hz / 0.13 s, kinder than the drone.
+
+### Drone scenario, 24 seeds, severity 0.7, --assume-colour-pad
+| Setting | Finish | 95 % lower bound | Pad mean s | Home mean / max s | Runs with a touch | Return scrapes |
+|---|---|---|---|---|---|---|
+| safe (deployable) | 23/24 | 0.80 | 66.5 | 91.2 / 110.7 | 5 | s15 |
+| candidate A (--tune) | 23/24 | 0.80 | 71.3 | 95.2 / 101.3 | 5 | - |
+
+- Both fail **s18**: 1 s along the side of the **window** during the traverse. The same seed with
+  the sim's default latency passes (1 touch): the old defaults overstated the pass rate.
+- A under drone latency: no seed fixed, +4.8 s, minimum clearance lower on 14/23 seeds. Its gain at
+  the default latency does not transfer. **Dropped.**
+- 18 runs first died of MemoryError (48 at once on 32 GB, every new course voxelising); they were
+  re-flown. The batch now keeps such runs apart (`sim_errors`), retries them, defaults to 16 jobs.
+
+### Found in the referee
+After the pad, `referee.update` only watches for a hit above `crash_speed`, and goalrun's crash check
+is off: wall scrapes on the way home show in neither `touches` nor `crashed`. The batch reports them
+from clearance (`return_scrape_runs`). Not changed in the referee (owned by the course work).
+
+### Faster sim
+`MessyWorld.cast` (50 % of a run) packs solid / mesh / near into one flat uint8 grid. Frozen-copy eval
+`goalnav/test/test_cast_speed.py`: bit-identical hits, 1.3-1.5x on the march; end to end, identical
+traces (seeds 1, 2) and best-of-3 wall time 51.8 -> 41.6 s (**1.25x**) for a 60 s flight. Measured
+while another session ran sims, so noisy.
+
+### Sim to real: the process, and its gaps
+1. **Measure** on the drone (read-only: `tools/drone_tools/topic_rates.py` on `/goalnav/stereo/points`
+   for rate and age) -> update `drone_measured.yaml` with the source log.
+2. **Gate in the sim** with exactly what flies: `python -m localsim.batch --scenario drone --seeds 1-100`
+   with no `--tune`. `summary.json` says `deployable` and records commit, profile hash and flags.
+3. **Only profile changes fly.** The drone runs `ros2 launch drone_ref goalnav.launch.py` with no
+   arguments at power-up (`skybetav1/container_scripts/run_competitor.sh`), so a `--tune` result counts
+   only once it is written into `config/goalnav_profiles.yaml` and re-gated. Staged tests (`stop_after`)
+   hit the same wall: there is no way to pass `tuning` at power-up.
+   *Proposal (not done; drone code, needs the team):* the launch file reads its default
+   profile/tuning from one committed `config/deploy.yaml`, and the batch reads the same file, so
+   sim and drone cannot disagree and a staged test is a one-line change plus a power cycle.
+4. **Fly, pull the log, compare** (`tools/drone pull team_ws/logs/<run>`). Missing: no tool reads the
+   MCAP bag back (no `mcap` module here) to compare real depth age/rate and the flown path with the sim.
+
+Open gaps: no colour camera on the drone stack (every result above assumes one; 0/24 without);
+odometry drift not measured; return-leg contact not judged by the referee.
+
+### Next
+- Re-run the drone gate on the rebuilt course (`agent/sim-walls`, ladder merged in): it changes the
+  maze (M2 gone), so the corridor numbers above are out of date.
+- Window centring under 0.23 s latency (s18); 100+ seeds for a real bound (381 clean runs for 99 %).
