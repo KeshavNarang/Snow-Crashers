@@ -23,6 +23,9 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+# The organizers' flight interface, run unmodified: everything goalnav sends
+# reaches the vehicle through its clamps, conversions and 10 Hz output.
+sys.path.insert(0, str(ROOT.parent / 'skybetav1/src/skybeta_flight_interface'))
 
 from localsim import fakeros as m                      # noqa: E402
 from localsim import messy_course                      # noqa: E402
@@ -36,6 +39,7 @@ from localsim.vehicle import Vehicle, VehicleConfig    # noqa: E402
 from localsim.world import Camera                      # noqa: E402
 
 PHYSICS_DT = 0.005
+PILOT_SWITCH_NS = 1_500_000_000     # arm, then switch to Position "within a few seconds"
 DEPTH_TOPIC, INFO_TOPIC = '/oak/stereo/image_raw', '/oak/stereo/camera_info'
 RGB_TOPIC, RGB_INFO_TOPIC = '/oak/rgb/image_raw', '/oak/rgb/camera_info'
 CAMERA_PITCH_DEG = 26.7      # cad/modded-cam.stl: the camera face points 26.7 degrees down
@@ -170,6 +174,7 @@ def main(argv=None):
     for item in args.set:
         key, value = item.split('=', 1)
         params['drone_ref_goalnav'][key] = yaml.safe_load(value)
+    params['flight_interface'] = {'auto_offboard_on_arm': True}     # as the competitor launch file sets it
     bus = m.Bus(params)
     bus.ns = 5_000_000_000
     # The drone's OAK-D: fx 398.7 px at 640x400 (77.5 deg), minimum range 0.31 m.
@@ -185,7 +190,9 @@ def main(argv=None):
     defaults.update({k: float(v) for k, v in (item.split('=', 1) for item in args.vehicle)})
     with m.installed(bus, ROOT):
         from drone_ref import goalnav_node
+        from skybeta_flight_interface.flight_interface import FlightInterface
         node = goalnav_node.GoalNavNode()
+        FlightInterface()
         mission = node.mission
         launch = meta['launch']
         walls = WallField.try_load(world, obj, ROOT / 'localsim/.cache')
@@ -271,10 +278,11 @@ def fly(args, bus, world, camera, vehicle, mission, referee, recorder, meta, rng
             recorder.camera_frame(shown[0], rgb_camera, shown[1], camera, shown[2], shown[3], mission, meta['pad'])
         bus.run_timers()
         if start is None and bus.ns >= start_at:
-            start = bus.call('/goalnav/start')
-            info['start'] = [start.success, start.message]
-            if not start.success:
-                break
+            vehicle.pilot_arm()                       # The safety pilot arms on Altitude...
+            start = bus.ns
+        if start is not None and 'start' not in info and bus.ns >= start + PILOT_SWITCH_NS:
+            vehicle.pilot_position()                  # ...then switches to Position: the go signal.
+            info['start'] = [True, 'pilot armed, then switched to Position']
         while vehicle.impacts:
             when, vertical, _ = vehicle.impacts.pop(0)
             referee.impact(when, vertical)
@@ -306,7 +314,7 @@ def fly(args, bus, world, camera, vehicle, mission, referee, recorder, meta, rng
             info['pad_landing'] = pad_landing(vehicle.p, recorder.aim(mission, vehicle.p), meta['pad'])
         if referee.crashed:
             break
-        if mission.state in ('DONE', 'ABORTED') and vehicle.landed:
+        if mission.state in ('DONE', 'ABORTED', 'HANDED_OVER') and vehicle.landed:
             settled = settled or bus.ns
             if bus.ns - settled > 3e9:
                 break

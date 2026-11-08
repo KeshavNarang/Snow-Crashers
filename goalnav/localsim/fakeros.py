@@ -1,4 +1,5 @@
-"""In-process stand-in for the ROS 2 APIs our two nodes import.
+"""In-process stand-in for the ROS 2 APIs our nodes import (also the
+organizers' skybeta flight_interface, run unmodified in the simulator).
 
 It runs the real ``mission_node.main`` and ``vision_node.main`` against a
 deterministic simulated clock and a queued topic bus. Message classes copy the
@@ -10,11 +11,15 @@ from array import array
 from collections import defaultdict, deque
 import contextlib
 import copy
+from pathlib import Path
 import sys
 import types
 from unittest import mock
 
 import numpy as np
+
+# The message version lines flight_interface resolves its /fmu topic names from.
+PX4_MSGS_SHARE = str(Path(__file__).with_name('px4_msgs'))
 
 
 class Msg:
@@ -41,6 +46,8 @@ Vector3 = _msg('Vector3', x=0., y=0., z=0.)
 Twist = _msg('Twist', linear=Vector3, angular=Vector3)
 TwistCov = _msg('TwistWithCovariance', twist=Twist, covariance=lambda: np.zeros(36))
 Odometry = _msg('Odometry', header=Header, child_frame_id='', pose=PoseCov, twist=TwistCov)
+PoseStamped = _msg('PoseStamped', header=Header, pose=Pose)
+TwistStamped = _msg('TwistStamped', header=Header, twist=Twist)
 Image = _msg('Image', header=Header, height=0, width=0, encoding='', is_bigendian=0, step=0,
              data=lambda: array('B'))
 RegionOfInterest = _msg('RegionOfInterest', x_offset=0, y_offset=0, height=0, width=0, do_rectify=False)
@@ -63,7 +70,8 @@ TriggerResponse = _msg('TriggerResponse', success=False, message='')
 
 # PX4 1.16 messages, fields our nodes read or write.
 VehicleStatus = _msg('VehicleStatus', {
-    'ARMING_STATE_DISARMED': 1, 'ARMING_STATE_ARMED': 2, 'NAVIGATION_STATE_AUTO_LOITER': 4,
+    'ARMING_STATE_DISARMED': 1, 'ARMING_STATE_ARMED': 2, 'NAVIGATION_STATE_ALTCTL': 1,
+    'NAVIGATION_STATE_POSCTL': 2, 'NAVIGATION_STATE_AUTO_LOITER': 4,
     'NAVIGATION_STATE_OFFBOARD': 14, 'NAVIGATION_STATE_AUTO_LAND': 18},
     timestamp=0, arming_state=1, nav_state=4, failsafe=False, pre_flight_checks_pass=True)
 VehicleLocalPosition = _msg(
@@ -81,7 +89,7 @@ OffboardControlMode = _msg('OffboardControlMode', timestamp=0, position=False, v
 TrajectorySetpoint = _msg('TrajectorySetpoint', timestamp=0, position=lambda: np.zeros(3, np.float32),
                           velocity=lambda: np.zeros(3, np.float32), acceleration=lambda: np.zeros(3, np.float32),
                           jerk=lambda: np.zeros(3, np.float32), yaw=0., yawspeed=0.)
-VehicleCommand = _msg('VehicleCommand', timestamp=0, command=0, param1=0., param2=0., target_system=0,
+VehicleCommand = _msg('VehicleCommand', {'VEHICLE_CMD_DO_SET_MODE': 176}, timestamp=0, command=0, param1=0., param2=0., target_system=0,
                       target_component=0, source_system=0, source_component=0, from_external=False)
 VehicleCommandAck = _msg('VehicleCommandAck', timestamp=0, command=0, result=0, target_system=0,
                          target_component=0)
@@ -253,19 +261,21 @@ def _modules(bus):
         'VehicleStatus', 'VehicleLocalPosition', 'VehicleAttitude', 'VehicleLandDetected', 'BatteryStatus',
         'OffboardControlMode', 'TrajectorySetpoint', 'VehicleCommand', 'VehicleCommandAck', 'VehicleOdometry',
         'DistanceSensor')}
-    qos = types.SimpleNamespace(BEST_EFFORT=1, VOLATILE=1, KEEP_LAST=1)
+    qos = types.SimpleNamespace(BEST_EFFORT=1, RELIABLE=2, VOLATILE=1, TRANSIENT_LOCAL=2, KEEP_LAST=1)
     return {
         'rclpy': module('rclpy', init=lambda args=None: None, shutdown=lambda: None, spin=lambda node: None),
         'rclpy.node': module('rclpy.node', Node=Node),
         'rclpy.time': module('rclpy.time', Time=types.SimpleNamespace(from_msg=copy.deepcopy)),
         'rclpy.duration': module('rclpy.duration', Duration=lambda **kw: types.SimpleNamespace(**kw)),
         'rclpy.qos': module('rclpy.qos', QoSProfile=lambda **kw: kw, ReliabilityPolicy=qos,
-                            DurabilityPolicy=qos, HistoryPolicy=qos, qos_profile_sensor_data='sensor'),
+                            DurabilityPolicy=qos, HistoryPolicy=qos, QoSReliabilityPolicy=qos,
+                            QoSDurabilityPolicy=qos, QoSHistoryPolicy=qos, qos_profile_sensor_data='sensor'),
         'rcl_interfaces': module('rcl_interfaces'),
         'rcl_interfaces.msg': module('rcl_interfaces.msg', ParameterDescriptor=ParameterDescriptor),
         'px4_msgs': module('px4_msgs'), 'px4_msgs.msg': module('px4_msgs.msg', **px4),
         'geometry_msgs': module('geometry_msgs'),
-        'geometry_msgs.msg': module('geometry_msgs.msg', PointStamped=PointStamped, Point=Point),
+        'geometry_msgs.msg': module('geometry_msgs.msg', PointStamped=PointStamped, Point=Point,
+                                    PoseStamped=PoseStamped, TwistStamped=TwistStamped),
         'nav_msgs': module('nav_msgs'), 'nav_msgs.msg': module('nav_msgs.msg', Odometry=Odometry),
         'sensor_msgs': module('sensor_msgs'),
         'sensor_msgs.msg': module('sensor_msgs.msg', Image=Image, CameraInfo=CameraInfo, PointCloud2=PointCloud2),
@@ -284,7 +294,8 @@ def _modules(bus):
                           TransformException=LookupError),
         'ament_index_python': module('ament_index_python'),
         'ament_index_python.packages': module('ament_index_python.packages',
-                                              get_package_share_directory=lambda name: bus.share_dir),
+                                              get_package_share_directory=lambda name: PX4_MSGS_SHARE
+                                              if name == 'px4_msgs' else bus.share_dir),
     }
 
 

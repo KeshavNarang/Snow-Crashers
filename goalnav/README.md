@@ -9,7 +9,7 @@ CAD-replay race stack did not). ROS 2 package name: `drone_ref`.
 | Path | What |
 |---|---|
 | `drone_ref/goalnav/` | The navigator: live map, goal chain, A* planner, window manoeuvre, pad detection, return |
-| `drone_ref/goalnav_node.py` | ROS 2 adapter: OAK-D depth + RGB, VL53L1X, PX4 offboard (full trajectory setpoints) |
+| `drone_ref/goalnav_node.py` | ROS 2 adapter: OAK-D depth + RGB, VL53L1X; velocity setpoints to skybeta's `flight_interface` (never `/fmu/in/*`) |
 | `config/goals.yaml` | The course as a chain of goals, plus course facts (net anchors, return mark and corner, takeoff offset) |
 | `config/goalnav_profiles.yaml` | Risk profiles: `safe`, `normal`, `fast` |
 | `localsim/` | The as-built course simulator (`goalrun.py`), 3D viewer, run index |
@@ -36,10 +36,15 @@ Build with colcon (`goalnav_node` executable), then
 
 ```
 ros2 launch drone_ref goalnav.launch.py profile:=safe tuning:='{stop_after: corridor_1}'
-ros2 service call /goalnav/start std_srvs/srv/Trigger
 ```
 
-`stop_after: <goal id>` ends a staged test there: straight down, disarm. Goal
+The launch file also starts skybeta's `flight_interface` with
+`auto_offboard_on_arm:=true`. There is no start command: the pilot arms on
+Altitude, then switches to Position, the interface enters Offboard and the
+navigator takes off (docs/GOALNAV.md, "the ROS 2 adapter").
+
+`stop_after: <goal id>` ends a staged test there: straight down until PX4
+disarms it (`COM_DISARM_LAND`). Goal
 ids are in `config/goals.yaml` (`corridor_1`, `first_corridor` (CP1), `gate_a`
 (CP2), `tunnel_exit` (CP3), `window_back`, `pad`). Suggested order: props off on
 the bench first (check the camera panels, the camera's top edge level, the mat
@@ -57,11 +62,13 @@ and that PX4's `COM_DISARM_LAND` stays above the 1 s rest on the pad.
   course 3 ft north (blue floor), glass windows 8 ft west.
 - **Drone shape from the CAD:** feet 7 cm under the origin, battery top 5 cm
   over, arms/motors 0.20 m, rotor tips 0.29 m.
-- **Pad:** touches down armed (`pad_disarm: false`) and disarms back on the
-  launch mark. The published rules say "land and disarm" on the pad: confirm
-  with the organizers.
+- **Pad:** touches down armed and lifts off again after 1 s, under PX4's
+  2 s `COM_DISARM_LAND`: nothing may disarm or re-arm it (the interface has no
+  arm path), and Offboard comes once per arming. The published rules say
+  "land and disarm" on the pad: confirm with the organizers.
 - **Return:** one move along a height profile from the map, facing where M1
   meets the barrier.
-- **Holds:** takeoff, descents and any stop use PX4 position setpoints.
-- **Not yet run on the drone:** the node's ROS wiring, PX4 taking full
-  trajectory setpoints, the Orin's compute (7 ms per depth frame on a laptop).
+- **Holds:** takeoff, descents and any stop are twists carrying a position
+  correction (the interface takes a pose or a twist, never both).
+- **Not yet run on the drone:** the node's ROS wiring, the takeover through
+  `flight_interface`, the Orin's compute (7 ms per depth frame on a laptop).
