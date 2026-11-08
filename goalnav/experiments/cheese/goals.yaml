@@ -6,6 +6,8 @@
 # lookouts just south of the barrier were 1.5-1.9 m from the mat, so it stayed below the
 # frame (rebuilt seed 1: "pad not seen from any lookout"). From y 0.7 the landing area
 # (PAD_AREA, x -2.35..-0.85, y -2.6..-1.55) is 2.3-3.4 m ahead, inside the frame.
+# The first lookout is east of the line from the launch past the stepladder's original
+# spot (-2.31, -0.62), which hides the mat; none within ~0.5 m of the west net (crashed there).
 launch_cad: [-2.52, 0.82]
 launch_heading_deg: 90
 net_half: [3.048, 3.048]
@@ -14,4 +16,4 @@ return_offset: [0.0, 0.0]
 net_extra: {west: 0.12}
 goals:
   - {id: over_barrier, kind: waypoint, at: [-2.25, -0.20], heading: -90, across: 0.10, along: 0.10}
-  - {id: pad, kind: pad, at: [-1.60, -2.07], heading: -90, across: 0.30, along: 0.30, checkpoint: CP5, lookouts: [[-2.45, 0.75], [-2.80, 0.70]]}
+  - {id: pad, kind: pad, at: [-1.60, -2.07], heading: -90, across: 0.30, along: 0.30, checkpoint: CP5, lookouts: [[-2.10, 0.95], [-1.75, -0.25], [-2.45, 0.95]]}
