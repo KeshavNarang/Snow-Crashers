@@ -536,9 +536,10 @@ class GoalMission:
             self.speed, self.free_ahead = 0., 0.
 
     def _free_waypoint(self, goal, target, clear):
-        """A plain waypoint (not anchored, not a passage) on or beside an obstacle: aim for clear space
-        within 0.6 m instead (seed 705: no path to window_lookout for 25 s, then an abort)."""
-        if goal.kind != 'waypoint' or goal.anchor is not None:
+        """A waypoint or gap (not anchored, not the tunnel or window) on or beside an obstacle: aim for
+        clear space within 0.6 m instead (seed 705: no path to window_lookout, and in another run to
+        m1_end, for 25-45 s, then an abort)."""
+        if goal.kind not in ('waypoint', 'gap') or goal.anchor is not None:
             return target
         found = free_target(self.map, clear, target, need=self.planner.cfg.hard_radius + 0.05, search=0.6)
         if found is None:
