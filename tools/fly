@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# One command per stage to fly goalnav on OUR drone (skybeta-03). Plain steps: FLYING.md.
+#   tools/fly deploy "<your name>"   lock, copy goalnav + scripts, pick the goalnav mission (asks sudo)
+#                                    -> then power-cycle the drone (battery out 10 s, in, wait ~3 min)
+#   tools/fly check                  pre-flight (props off, on the launch mark) + goalnav status
+#   tools/fly logs                   copy the newest flight log folder to ./flight-logs/
+#   tools/fly done                   put Luke's overwall_nav back (asks sudo) and release the lock
+set -euo pipefail
+root="$(cd "$(dirname "$0")/.." && pwd)"; d="$root/tools/drone"; cd "$root"
+host=$("$d" run hostname)
+[ "$host" = "skybeta-03" ] || { echo "STOP: connected to '$host', not skybeta-03. Disconnect."; exit 2; }
+in_stack() { "$d" run "docker exec skybeta-stack bash -c \"source skybeta_env.sh >/dev/null 2>&1; $1\""; }
+case "${1:-}" in
+  deploy)
+    who="${2:?usage: tools/fly deploy \"<your name>\"}"
+    "$root/tools/drone-lock" acquire "$who" "goalnav flight test"
+    "$d" run 'mv ~/team_ws/src/drone_ref ~/drone_ref.prev-$(date +%Y%m%d-%H%M%S) 2>/dev/null; true'
+    "$d" push goalnav '~/team_ws/src/drone_ref'
+    "$d" push team_ws/run_mission.sh '~/team_ws/run_mission.sh'
+    "$d" push team_ws/preflight.sh '~/team_ws/preflight.sh'
+    "$d" run 'chmod +x ~/team_ws/run_mission.sh ~/team_ws/preflight.sh'
+    echo "== build check (about a minute)"
+    in_stack "team_build.sh --packages-select drone_ref"
+    echo "== choosing the goalnav mission (sudo password = the login password)"
+    "$d" runt '~/team_ws/run_mission.sh drone_ref goalnav.launch.py'
+    echo; echo "NOW: power-cycle the drone (battery out 10 s, in), wait ~3 min, then: tools/fly check" ;;
+  check)
+    "$d" run '~/team_ws/preflight.sh' || true
+    echo "== goalnav status (10 s)"
+    in_stack "timeout 10 ros2 topic echo --once /goalnav/status" || echo "NO goalnav status: do not fly (redo deploy + power-cycle)" ;;
+  logs)
+    last=$("$d" run 'ls -t ~/team_ws/logs | head -1')
+    mkdir -p flight-logs && "$d" pull "~/team_ws/logs/$last" "flight-logs/" && echo "saved flight-logs/$last" ;;
+  done)
+    "$d" runt '~/team_ws/run_mission.sh overwall_nav overwall.launch.py' || true
+    "$root/tools/drone-lock" release ;;
+  *) sed -n 2,7p "$0"; exit 1 ;;
+esac

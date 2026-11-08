@@ -94,3 +94,28 @@ fine, PX4 link came back on its own), then **restored to overwall_nav**:
   120-370 ms old already: the remaining limit.
 - After the last restart (back to overwall_nav) the FC link did NOT come back (px4_link false, agent no
   datawriters): needs a Pixhawk power cycle. cuVSLAM odom read (-11.6, -1.4) on a still drone.
+
+## Decision (19:15): on-camera depth, approved by the organizers
+The team uses the OAK-D's on-camera stereo depth (and its colour camera); the organizers have approved
+changing the camera pipeline for this. goalnav does **not** do its own depth estimation: the CPU
+`stereo_node` (SGBM on the Jetson, 2.8-4 Hz) is being retired from goalnav.launch.py, and goalnav will read
+the driver's depth image (`/oak/stereo/image_raw`, 640x400, ~29 Hz measured with depthai) and the colour
+image. Mechanism: `team_ws/Dockerfile` (team image via `host/run.sh build`) installs
+`team_ws/camera/oakd_vslam.yaml` over the stack's copy: same 1024x640@30 pair and IMU for cuVSLAM, plus
+`stereo` (depth, not aligned to colour) and `rgb` 640x400@15.
+
+## Fourth session: team image with on-camera depth (19:15-20:10, lock held, ~8 stack restarts, FC link survived)
+Rates by header stamp (`topic_rates.py`), all within minutes of a start (warm-up):
+
+| Camera config | pair (left) | depth | colour | cuVSLAM odom |
+|---|---|---|---|---|
+| organizers' `stereo` (earlier) | 30.0 | - | - | 27-30 |
+| `rgbd`, colour 640x400 @15 / @10 / @30 | 27.4-27.9 | 22-25 | 15 / 10 / 26.5 | 22-24, gaps to 400 ms |
+| **`depth` (no colour), shipped** | **28.9** | **28.2** | - | **27.9**, worst gap 174 ms |
+
+- Colour costs the pair ~2.5 fps at any colour rate (gap median 36-37 ms) and cuVSLAM more; not shipped. `rgbd`
+  after a full Jetson power cycle was the same (earlier runs may have overlapped someone else's camera use).
+- Depth: 16UC1 320x200 (640x400 input; the DEFAULT preset decimates x2), `oak_left_camera_optical_frame` with
+  `stereo.i_board_socket_id: 1`. One bench frame: 35 % valid, median 0.60 m, p5 0.33 m, bottom row empty.
+- `i_depth_preset: FAST_DENSITY` crashes the v3 driver (exit -6).
+- Handoff: `2026-11-07-goalnav-oak-depth-handoff.md`.
