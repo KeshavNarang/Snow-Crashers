@@ -131,7 +131,9 @@ def test_launch_spot_clear_of_stand_battens_at_floor_level():
     """Nothing lies under the drone's body and arms on the launch mark, down to the floor: sim
     seed 5 (severity 0.7, 2026-11-08) had the swung M1's stand frame 0.086 m from the launch,
     under the 3 cm floor band the check looked at, so the drone touched it at take-off."""
-    bad = mc._sample(5 * 1000 + 8, 0.7)          # the layout seed 5 flew (attempt 8)
+    from unittest import mock
+    with mock.patch.object(mc, 'START_CORNER_GAP', 0.):     # the geometry it flew in: M1 at panel 1's end
+        bad = mc._sample(5 * 1000 + 8, 0.7)      # the layout seed 5 flew (attempt 8)
     solid = {k: v for k, v in bad.groups.items() if not k.startswith(('Floor', 'Landing'))}
     grid, res, extent = mc._band_raster(solid, -0.005, 0.03)
     i = np.floor((np.asarray(bad.launch['xy']) + extent) / res).astype(int)
@@ -162,3 +164,14 @@ def test_barrier_panel_1_vinyl_faces_the_ladder(rebuilt):
         a, b = (np.asarray(p) for p in b1.pieces[0])
         d = (b - a) / np.linalg.norm(b - a)
         assert (np.array([-d[1], d[0]]) * b1.tarp_side)[1] < 0, (seed, sev)
+
+
+def test_gap_between_barrier_panel_1_and_the_start_corner(rebuilt):
+    """Team, 2026-11-08 (viewer screenshot): about 1 ft of space between barrier panel 1 (behind the
+    drone at takeoff) and the corner where M1 meets the barrier, by the start and finish."""
+    for (seed, sev), course in rebuilt.items():
+        walls = _by_name(course.walls)
+        east_end = np.asarray(walls['Barrier 1'].pieces[0][1])      # panel 1's east end (the joint)
+        corner = np.asarray(walls['M1'].pieces[0][0])
+        gap = float(np.linalg.norm(east_end - corner))
+        assert 0.25 <= gap <= 0.40, (seed, sev, gap)
