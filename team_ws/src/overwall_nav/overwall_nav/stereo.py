@@ -69,10 +69,17 @@ def level(points_cam, pitch_deg, roll_deg=0.0):
     return np.asarray(points_cam, dtype=float) @ mount_matrix(pitch_deg, roll_deg).T
 
 
-def fit_floor(points_cam, iterations=80, tolerance=0.02, seed=0, min_inliers=0.2):
+def fit_floor(points_cam, iterations=80, tolerance=0.02, seed=0, min_inliers=0.2,
+              pitch_deg=None, max_tilt_deg=12.0):
     """RANSAC floor plane in the camera frame -> dict(pitch_deg, roll_deg, height_m, inliers)
     for the camera relative to that plane, or None. Pitch is positive DOWN, roll positive
-    right side down; height is the camera's distance above the plane."""
+    right side down; height is the camera's distance above the plane.
+
+    ``pitch_deg`` (the camera's mount pitch, degrees down) turns on an orientation prior: a candidate
+    plane is only considered if its pitch is within ``max_tilt_deg`` of it and its roll within the same
+    bound. Without it the plane with the most inliers wins, and on a glossy table that is sometimes the
+    face of a nearby box (found on skybeta-03), which gives a wrong ground height. A real mount error
+    larger than ``max_tilt_deg`` reads as no fit, not as a wrong one."""
     pts = np.asarray(points_cam, dtype=float)
     if len(pts) < 50:
         return None
@@ -80,13 +87,25 @@ def fit_floor(points_cam, iterations=80, tolerance=0.02, seed=0, min_inliers=0.2
     if len(pts) > 3000:
         pts = pts[rng.choice(len(pts), 3000, replace=False)]
     best, best_count = None, 0
-    for _ in range(iterations):
-        a, b, c = pts[rng.choice(len(pts), 3, replace=False)]
-        n = np.cross(b - a, c - a)
-        norm = np.linalg.norm(n)
-        if norm < 1e-9:
-            continue
-        n /= norm
+    # Candidate planes from random point triples, generated and gated in one vectorised step. With the
+    # orientation prior most triples are not floor-like and are dropped here for the price of a cross
+    # product; only the first ``iterations`` survivors are scored, so the gate does not starve the
+    # search. Without the prior every candidate survives and this is the old loop.
+    tries = iterations * (8 if pitch_deg is not None else 1)
+    tri = rng.integers(0, len(pts), (tries, 3))
+    a_, b_, c_ = pts[tri[:, 0]], pts[tri[:, 1]], pts[tri[:, 2]]
+    normals = np.cross(b_ - a_, c_ - a_)
+    norms = np.linalg.norm(normals, axis=1)
+    ok = norms > 1e-9
+    normals[ok] /= norms[ok][:, None]
+    if pitch_deg is not None:
+        flip = np.where((-(normals * a_).sum(axis=1) < 0)[:, None], -1.0, 1.0)
+        nn = normals * flip
+        pitch = np.degrees(np.arctan2(-nn[:, 2], -nn[:, 1]))
+        roll = np.degrees(np.arctan2(-nn[:, 0], np.hypot(nn[:, 1], nn[:, 2])))
+        ok &= (np.abs(pitch - pitch_deg) <= max_tilt_deg) & (np.abs(roll) <= max_tilt_deg)
+    for k in np.flatnonzero(ok)[:iterations]:
+        n, a = normals[k], a_[k]
         count = np.count_nonzero(np.abs((pts - a) @ n) < tolerance)
         if count > best_count:
             best, best_count = (n, a), count
@@ -95,7 +114,11 @@ def fit_floor(points_cam, iterations=80, tolerance=0.02, seed=0, min_inliers=0.2
     n, a = best
     inliers = pts[np.abs((pts - a) @ n) < tolerance]
     centre = inliers.mean(axis=0)
-    n = np.linalg.svd(inliers - centre)[2][2]
+    centred = inliers - centre
+    # Plane normal = the direction of least spread: the smallest-eigenvalue eigenvector of the 3 x 3
+    # covariance. Same answer as the smallest right-singular vector of an SVD of ``centred``, but an
+    # SVD of an N x 3 matrix builds an N x N factor by default (58 % of a fit, before this change).
+    n = np.linalg.eigh(centred.T @ centred)[1][:, 0]
     d = -float(n @ centre)                      # plane: n . X + d = 0
     if d < 0:                                    # orient n from the floor up towards the camera
         n, d = -n, -d
