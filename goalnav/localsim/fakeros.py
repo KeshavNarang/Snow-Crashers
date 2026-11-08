@@ -177,6 +177,12 @@ def _modules(bus):
 
         def create_subscription(self, kind, topic, callback, qos):
             bus.subscribe(topic, callback)
+            return (topic, callback)
+
+        def destroy_subscription(self, handle):
+            topic, callback = handle
+            if callback in bus.subscribers.get(topic, ()):
+                bus.subscribers[topic].remove(callback)
 
         def create_publisher(self, kind, topic, qos):
             return Publisher(topic)

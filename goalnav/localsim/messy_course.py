@@ -766,6 +766,10 @@ def _sample(seed, severity, layout=None, ladder=True, ladder_pose=None):
     scanned = list(placed.values())           # The tape and its lines follow these.
     if layout == 'rebuilt':
         placed = sampler.rebuild(placed, joints)
+    if layout == 'rebuilt':
+        # Team, 2026-11-08: panel 1 (behind the drone at takeoff) turned: vinyl toward the ladder,
+        # its stand's struts and feet toward the launch corridor.
+        Sampler._feet_toward(barrier[0], (0., 1.))
     walls = barrier + list(placed.values())
     pad, pad_mat = _place_pad(sampler, walls)
     for wall in walls:

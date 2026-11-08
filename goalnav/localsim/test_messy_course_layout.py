@@ -152,3 +152,13 @@ def test_every_rebuilt_course_validates_without_m2(rebuilt):
         inside = copy.copy(c)
         inside.groups = {k: v for k, v in c.groups.items() if '(next course)' not in k}
         assert mc.validate(inside) == [], (seed, sev)
+
+
+def test_barrier_panel_1_vinyl_faces_the_ladder(rebuilt):
+    """Team, 2026-11-08: barrier panel 1 (behind the drone at takeoff) is turned: its vinyl faces the
+    ladder (south), its stand's struts and feet face the launch corridor (north)."""
+    for (seed, sev), course in rebuilt.items():
+        b1 = _by_name(course.walls)['Barrier 1']
+        a, b = (np.asarray(p) for p in b1.pieces[0])
+        d = (b - a) / np.linalg.norm(b - a)
+        assert (np.array([-d[1], d[0]]) * b1.tarp_side)[1] < 0, (seed, sev)

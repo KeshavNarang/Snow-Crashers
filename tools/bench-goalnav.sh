@@ -26,13 +26,26 @@ v=$(hz /oak/rgb/image_raw); ge "$v" 5 && say PASS colour "$v Hz" || say FAIL col
 v=$(hz /visual_slam/tracking/odometry); ge "$v" 20 && say PASS cuVSLAM "$v Hz" || say FAIL cuVSLAM "$v Hz"
 st=$(r "timeout 5 ros2 topic echo --once --full-length /skybeta/state")
 grep -q '"px4_link": true' <<<"$st" && say PASS "PX4 link" connected || say FAIL "PX4 link" "down: battery power-cycle (flight controller + Jetson)"
-ev=$(r "timeout 5 ros2 topic echo --once --qos-reliability best_effort /fmu/out/estimator_status_flags")
+# Fusion and vision age over 30 s, not one snapshot (2026-11-08: one snapshot showed fusion dropped
+# while 18/18 samples over 20 s were fused). Want PX4 fusing >= 95 % and median vision age < 150 ms.
+echo "  ....  sampling PX4 fusion and vision age for 30 s"
+r "timeout 30 ros2 topic echo --qos-reliability best_effort --field cs_ev_pos /fmu/out/estimator_status_flags > /tmp/bench_fuse.txt &
+   timeout 30 ros2 topic echo /fmu/in/vehicle_visual_odometry > /tmp/bench_vio.txt; wait"
+fz=$(docker exec skybeta-stack grep -cx True /tmp/bench_fuse.txt); fn=$(docker exec skybeta-stack grep -cxE 'True|False' /tmp/bench_fuse.txt)
+pct=$(awk -v a="$fz" -v b="$fn" 'BEGIN {print (b > 0) ? int(100 * a / b) : 0}')
+(( fn > 0 && pct >= 95 )) && say PASS "PX4 fuses VIO (30 s)" "$pct % of $fn samples" \
+  || say FAIL "PX4 fuses VIO (30 s)" "$pct % of $fn samples (need >= 95 %): no steady position, do not fly"
+ages=$(docker exec skybeta-stack awk '/^timestamp:/ {t=$2} /^timestamp_sample:/ {printf "%d\n", (t - $2) / 1000}' /tmp/bench_vio.txt | sort -n)
+n=$(wc -l <<<"$ages"); med=$(sed -n "$(( (n + 1) / 2 ))p" <<<"$ages"); p90=$(sed -n "$(( (n * 9 + 9) / 10 ))p" <<<"$ages")
+[[ -n $med ]] && (( med < 150 )) && say PASS "vision age (30 s)" "median $med ms, 90 % under $p90 ms ($n samples)" \
+  || say FAIL "vision age (30 s)" "median ${med:-?} ms, 90 % under ${p90:-?} ms (need median < 150)"
 lp=$(r "timeout 5 ros2 topic echo --once --qos-reliability best_effort /fmu/out/vehicle_local_position")
-grep -q '^cs_ev_pos: true' <<<"$ev" && grep -q '^xy_valid: true' <<<"$lp" && say PASS "PX4 fuses VIO" "cs_ev_pos, xy_valid" \
-  || say FAIL "PX4 fuses VIO" "no (cs_ev_pos/xy_valid false): no position, do not fly"
-vo=$(r "timeout 5 ros2 topic echo --once /fmu/in/vehicle_visual_odometry")
-age=$(awk '/^timestamp:/ {t=$2} /^timestamp_sample:/ {s=$2} END {if (t && s) printf "%d", (t - s) / 1000}' <<<"$vo")
-[[ -n $age ]] && (( age < 150 )) && say PASS "vision age" "$age ms" || say FAIL "vision age" "${age:-?} ms (PX4 rejects stale vision)"
+grep -q '^xy_valid: true' <<<"$lp" && say PASS "PX4 position" "xy_valid" || say FAIL "PX4 position" "xy_valid false"
+# CPU per process (one 2 s sample): the camera/cuVSLAM containers need their share or vision is late.
+cpu=$(top -b -d 2 -n 2 | awk '/^top -/ {n++} n == 2 && $1 ~ /^[0-9]+$/ {print $9, $12}' \
+      | grep -E 'compone|goalnav|stereo_|ros2|flight_|python3' | sort -rn | head -6 | awk '{printf "%s %s%%  ", $2, $1}')
+load=$(cut -d' ' -f1 /proc/loadavg)
+say INFO "CPU (load $load)" "$cpu"
 gs=$(r "timeout 6 ros2 topic echo --once --full-length /goalnav/status")
 state=$(grep -o '"state": "[A-Z_]*"' <<<"$gs" | cut -d'"' -f4)
 [[ -n $state ]] && say PASS "goalnav status" "$state" || say FAIL "goalnav status" "none"

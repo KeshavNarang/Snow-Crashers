@@ -81,6 +81,18 @@ class LaunchLikeOverwall(unittest.TestCase):
         camera = [d for d in _assigned(self.goal, 'GOALNAV') if d[0] == 'camera']
         self.assertEqual(camera and camera[0][1], 'rgbstereo')
 
+    def test_light_on_the_jetson_by_default(self):
+        """skybeta-03, 2026-11-08 01:25-01:31, goalnav running: the bag recorder took 44 % CPU with both
+        mono streams, vision reached PX4 236-400 ms old and PX4 fused only 60 % of a 30 s sample
+        (62-105 ms and fused without goalnav). No mono video in the bag, and in rgbstereo goalnav takes
+        no image of its own (stereo_node is the one 30 Hz mono subscriber; the pad uses colour)."""
+        defaults = {name: default for name, default, _ in _assigned(self.goal, 'GOALNAV')}
+        self.assertEqual(defaults.get('record_video'), 'false')
+        self.assertEqual(defaults.get('record'), 'true')
+        self.assertEqual(_assigned(self.goal, 'CAMERA_MODES')['rgbstereo']['goalnav'].get('image_topic'), '')
+        self.assertLessEqual(_assigned(self.goal, 'STEREO')['rate_hz'], 5.0)     # sim plans with 2.8 Hz
+        self.assertNotIn('/oak/rgb/image_raw', _assigned(self.goal, 'TOPICS'))
+
     def test_entry_is_generate_launch_description(self):
         names = [n.name for n in self.goal.body if isinstance(n, ast.FunctionDef)]
         self.assertIn('generate_launch_description', names)

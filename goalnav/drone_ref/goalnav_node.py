@@ -117,11 +117,10 @@ class GoalNavNode(Node):
             self.create_subscription(CameraInfo, p['depth_info_topic'], self._depth_info, qos)
         if p['points_topic']:
             self.create_subscription(PointCloud2, p['points_topic'], self._points, qos)
-        self.create_subscription(Image, p['image_topic'], self._image, qos)
-        self.create_subscription(CameraInfo, p['image_info_topic'], self._image_info, qos)
-        if p['pad_image_topic']:
-            self.create_subscription(Image, p['pad_image_topic'], self._pad_image, qos)
-            self.create_subscription(CameraInfo, p['pad_info_topic'], self._pad_info, qos)
+        if p['image_topic']:                             # '' (rgbstereo): no 30 Hz mono into Python
+            self.create_subscription(Image, p['image_topic'], self._image, qos)
+            self.create_subscription(CameraInfo, p['image_info_topic'], self._image_info, qos)
+        self.qos, self.pad_subs = qos, None              # colour only while the pad is near (CPU)
         self.pad_detector = PadDetector()
         self.image_camera = self.pad_camera = self.depth_camera = None   # (fx, fy, cx, cy, R, undistort maps)
         self.floor_cells = None                          # the last cloud's floor, for the tape check
@@ -130,6 +129,7 @@ class GoalNavNode(Node):
         self.dt = 1. / float(p['control_hz'])
         self.create_timer(self.dt, self._tick)
         self.create_timer(0.2, self._publish_status)
+        self.create_timer(0.5, self._update_image_subscriptions)
 
     # -- inputs ----------------------------------------------------------------------
     def _now(self):
@@ -260,6 +260,21 @@ class GoalNavNode(Node):
         origin, rotation = self._camera_pose(pose, msg.header.frame_id, camera[4])
         return (image if channels == 3 else image[..., 0]), camera[:4], origin, rotation
 
+    def _update_image_subscriptions(self):
+        """Subscribe to the pad image only while the pad is near: rclpy decodes every image
+        before a callback can drop it, and that load slowed cuVSLAM on skybeta-03 (2026-11-08)."""
+        topic = self.p['pad_image_topic']
+        if not topic:
+            return
+        if self._wants_pad() and self.pad_subs is None:
+            self.pad_subs = (self.create_subscription(Image, topic, self._pad_image, self.qos),
+                             self.create_subscription(CameraInfo, self.p['pad_info_topic'], self._pad_info, self.qos))
+            self.get_logger().info(f'pad near: subscribed to {topic}')
+        elif not self._wants_pad() and self.pad_subs is not None:
+            for sub in self.pad_subs:
+                self.destroy_subscription(sub)
+            self.pad_subs = None
+
     def _wants_pad(self):
         m = self.mission
         return m.route is not None and any(g.kind == 'pad' for g in m.route.upcoming(4))
@@ -311,7 +326,9 @@ class GoalNavNode(Node):
         return Telemetry(t=self._now(), position=ned_to_enu((m.x, m.y, m.z)),
                          velocity=ned_to_enu((m.vx, m.vy, m.vz)), rotation=px4_attitude_enu(self.attitude.q),
                          armed=armed, offboard=offboard, landed=True if landed is None else bool(landed),
-                         valid=bool(m.xy_valid and m.z_valid and m.v_xy_valid))
+                         valid=bool(m.xy_valid and m.z_valid and m.v_xy_valid),
+                         dead_reckoning=bool(getattr(m, 'dead_reckoning', False)),
+                         xy_resets=int(getattr(m, 'xy_reset_counter', 0)))
 
     # -- outputs -----------------------------------------------------------------------
     def _tick(self):
