@@ -1,4 +1,5 @@
-"""The goal navigator, the stereo node it sees with, skybeta's flight interface, and a logger.
+"""The goal navigator, skybeta's flight interface, and a logger. Depth is the OAK-D's own
+(team_ws/camera/oakd_vslam.yaml, installed by the team image); goalnav computes none.
 
 Staged tests: tuning:='{stop_after: corridor_1}'. flight_interface is the organizers'
 node, unmodified, started as their competitor example starts it: it enters Offboard
@@ -9,7 +10,7 @@ container that is the drone's ~/team_ws, the one folder that survives a stack re
 or a power cycle; never /tmp):
 
 - ``bag/``    rosbag2 (MCAP, split every 2 GB): both mono camera streams (the video), the
-              IMU and camera calibration, goalnav's stereo points and image, cuVSLAM, PX4's
+              camera's depth (and colour, when it runs), IMU and calibration, cuVSLAM, PX4's
               state, /skybeta/state and every setpoint, /goalnav/status and /rosout;
 - ``ros/``    ROS_LOG_DIR: every node's log and its screen output;
 - ``run.json`` the launch arguments, host and start time.
@@ -36,7 +37,7 @@ ARGS = {'profile': ('safe', 'risk profile, config/goalnav_profiles.yaml'),
 
 VIDEO = ['/oak/left/image_mono', '/oak/right/image_mono']
 TOPICS = ['/oak/left/camera_info', '/oak/right/camera_info', '/oak/imu/data',
-          '/goalnav/stereo/points', '/goalnav/stereo/left', '/goalnav/stereo/left_info',
+          '/oak/stereo/image_raw', '/oak/stereo/camera_info', '/oak/rgb/image_raw', '/oak/rgb/camera_info',
           '/visual_slam/tracking/odometry', '/visual_slam/status',
           '/fmu/out/vehicle_local_position', '/fmu/out/vehicle_attitude', '/fmu/out/vehicle_status_v1',
           '/fmu/out/vehicle_land_detected', '/fmu/out/vehicle_control_mode', '/fmu/out/estimator_status_flags',
@@ -59,11 +60,10 @@ def _run(context):
     interface = Node(package='skybeta_flight_interface', executable='flight_interface', name='flight_interface',
                      output='both', condition=IfCondition(LaunchConfiguration('flight_interface')),
                      parameters=[{'auto_offboard_on_arm': True}])
-    stereo = Node(package='drone_ref', executable='stereo_node', name='goalnav_stereo', output='both')
     node = Node(package='drone_ref', executable='goalnav_node', name='drone_ref_goalnav', output='both',
                 parameters=[{'profile': LaunchConfiguration('profile'), 'tuning': LaunchConfiguration('tuning')}])
     # ROS_LOG_DIR first: every process started after it logs into this run's folder.
-    return [SetEnvironmentVariable('ROS_LOG_DIR', os.path.join(run, 'ros')), record, interface, stereo, node]
+    return [SetEnvironmentVariable('ROS_LOG_DIR', os.path.join(run, 'ros')), record, interface, node]
 
 
 def generate_launch_description():
