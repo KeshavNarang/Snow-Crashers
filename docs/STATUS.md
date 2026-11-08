@@ -23,12 +23,23 @@
   The experiment is on the original default workspace's local main history; this docs-only change does not publish its implementation.
 - **Cheese run, rebuilt course (2026-11-07 late, branch `agent/cheese-validate`).**
   Sim only (Python vehicle model; the pilot's Altitude, arm, Position start is modelled,
-  not PX4 SITL). Inputs: rebuilt walls; colour + on-camera depth at 8.6 Hz, 0.10-0.20 s
-  age; colour camera fixed at 27.0 deg (live TF); near ladder within 1.5 ft of the
-  barrier behind the launch; rocks at least 1.5 ft from the mat's edge (hard limit).
-  Lookouts moved north of the barrier (the old ones left the mat below the frame at 2.25 m).
-  Latest runs: near ladder sev 0.7 and far ladder x3 all landed on the pad, 0 contacts.
+  not PX4 SITL). Inputs now: rebuilt walls; depth and colour at 2.8 Hz, 0.4 s old (depth on
+  the Jetson measured 3.15 Hz, 90-400 ms); colour camera fixed at 27.0 deg (live TF); near
+  ladder within 1.5 ft of the barrier behind the launch; rocks at least 1.5 ft from the mat's
+  edge (hard limit); safe profile 0.4 m/s; 0.5 s on the pad from our own touchdown; return
+  spot 0.725 m off the barrier and halfway between the west net and M1.
+  Latest full course (near ladder, seed 405): done and returned, 0 contacts, 0.85 s on the
+  pad floor, rotor tips 0.21 m from the west net, 0.38 m from the barrier centreline.
   Details: [cheese log](../agents/logs/2026-11-07-cheese-sim.md).
+
+## Live drone, read 2026-11-08 00:26 (USB, read-only)
+
+`RGBSTEREO` team image, `overwall_nav` selected. PX4 link up after a flight-controller
+power-cycle; **PX4 fuses VIO** (cs_ev_pos, cs_ev_yaw true, xy_valid true), vision 62-105 ms
+old; rangefinder height in use (cs_rng_hgt). Colour 9.1 Hz, mono pair 29 Hz, cuVSLAM 31-32 Hz.
+CPU stereo (overwall `stereo_depth`, the same StereoRig as goalnav's stereo_node) 3.15 Hz,
+age 88-400 ms, with colour on, 9 min after boot. With `rgbd` (23:49) vision was 665 ms old
+and PX4 did not fuse. goalnav (`drone_ref`) is not built in the drone's current workspace.
 
 ## Live drone, read 2026-11-07 21:55 (USB, 5 min after boot, read-only)
 
