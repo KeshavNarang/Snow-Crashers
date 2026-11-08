@@ -5,7 +5,10 @@
 # goal's estimate plus that offset, then looked for in the live map within
 # `across` (either side of the travel direction) and `along` (forward/back).
 # `heading` is the direction of travel there, CAD degrees CCW from +x.
-# M1 stands at the end of the first short barrier panel (x ~ -2.02, CAD -1.93).
+# M1 stands at the end of the first short barrier panel (x ~ -2.00, CAD -1.93),
+# turned 6 degrees: its north end ~0.17 m east (scan). The barrier as scanned:
+# its first panel rises 6 degrees from y 0.31 at the west net to 0.42 at M1,
+# the second falls 2 degrees, the long third runs level at y ~0.38.
 # C1 (right of the tunnel exit) leans toward the exit as built, the CAD's
 # other way, so the drone keeps south of its end before turning west.
 # Where the 2026-11-06 scan differs from the CAD (localsim.messy_course):
@@ -26,18 +29,19 @@
 # is nothing to centre it on, and the scan has the tunnel ~0.1 m west of the CAD.
 # Kinds: waypoint and gap (most clearance), tube (the tunnel's inside),
 # opening (a hole in a wall; also picks the pass height), pad (landing).
-launch_cad: [-2.53, 0.9144]   # as built: centred between the west net and M1
+launch_cad: [-2.52, 0.82]     # as built: centred between the west net and M1, 0.457 m north of the barrier
 launch_heading_deg: 90        # the drone is placed facing CAD +y (north)
 net_half: [3.048, 3.048]      # expected net, centred on the CAD origin
 # The net is nearly invisible: each listed side moves with a wall it is built
-# against (as built, M1 stands one short panel from the west net; the barrier
-# runs 2.59 m south of the north net). Lines are the wall's CAD centreline.
+# against (as built, M1 stands one short panel from the west net; the
+# barrier's long panel runs 2.67 m south of the north net). Lines are the
+# wall's centreline: the CAD's, or the scan's where it differs.
 # Long straight walls the course heading is measured from (CAD centrelines).
 heading_walls:
-  - [[-2.02, 0.55], [-2.02, 2.10]]     # M1
+  - [[-1.99, 0.55], [-1.84, 2.00]]     # M1 (scan: turned 6 degrees)
   - [[-0.52, 1.45], [-0.52, 3.00]]     # M2 (scan)
   - [[1.01, 0.55], [1.01, 2.10]]       # M3 (scan)
-  - [[-3.00, 0.457], [0.50, 0.457]]    # the barrier, north face
+  - [[-0.90, 0.382], [0.55, 0.382]]   # the barrier's long panel, north face (scan: the first two are tilted)
 # The return mark, from the launch: [right, ahead] of its heading (m); ahead
 # keeps it off the barrier behind the launch (2 ft tolerance on the mark).
 return_offset: [0.0, 0.20]
@@ -46,13 +50,13 @@ return_offset: [0.0, 0.20]
 takeoff_offset: [0.05, 0.08]
 # Faced while returning and landing: where M1 meets the barrier (CAD), the
 # corner by the launch mark (the net beside it is nearly invisible).
-return_face: [-1.97, 0.46]
+return_face: [-2.00, 0.42]
 # Extra keep-out inside these nets (m): off the start the first corridor runs
 # between the west net and M1; keep nearer M1, which the camera sees.
 net_extra: {west: 0.12}
 net_anchors:
-  - {side: west,  wall: [[-2.02, 0.75], [-2.02, 2.00]]}
-  - {side: north, wall: [[-2.90, 0.457], [-1.20, 0.457]]}
+  - {side: west,  wall: [[-1.97, 0.75], [-1.84, 2.00]]}       # M1 (scan)
+  - {side: north, wall: [[-0.90, 0.382], [0.55, 0.382]]}      # the barrier's long panel (scan)
 
 goals:
   - {id: corridor_1,     kind: waypoint, at: [-2.53, 1.75],  heading: 90,  across: 0.30, along: 0.3}
