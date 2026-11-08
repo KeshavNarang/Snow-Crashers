@@ -18,4 +18,5 @@
 | Floor-fit orientation gate (evals first) | claude / agent/sensor-floorfit | done on branch, not deployed | team_ws/src/overwall_nav/{overwall_nav/stereo.py,test/test_floorfit.py}, agents/logs/2026-11-08-floorfit.md | Merge after review; deploy needs a power-cycle |
 | GPU stereo matcher (VPI CUDA/OFA) + benchmark | claude / agent/gpu-stereo | active | team_ws/src/overwall_nav/overwall_nav/{stereo,vpi_stereo,stereo_depth_node}.py, tools/gpu_bench/, agents/logs/2026-11-07-gpu-stereo.md | Live A/B (cuVSLAM rate, CPU, GPU) once the drone lock is free; not deployed |
 
+| overwall_nav lands on the pad (colour) | claude / agent/overwall-pad | done on branch, not deployed | team_ws/src/overwall_nav/{overwall_nav/pad.py,pad_detect_node.py,mission.py}, agents/logs/2026-11-07-overwall-pad.md | Colour on (team image, rgbd), props-off bench check of pad_detect with the real mat |
 | Central documentation refresh | Codex / agent/docs-current-state | done (docs only) | docs/, package guides | Current index, successful-flight report, camera/branch distinctions and rules update; no drone changes |

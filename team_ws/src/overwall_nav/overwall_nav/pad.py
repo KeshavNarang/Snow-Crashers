@@ -1,0 +1,147 @@
+"""Find the landing mat in the colour image (no ROS; adapted from goalnav's pad_detect.py).
+
+The mat's colour model is a chromaticity histogram (colour independent of brightness) of a
+picture cut from a photo of the real mat (``pad_reference.npy``, a copy of goalnav/assets/), with
+the orange floor tarp's colour cut out. Each frame:
+
+1. pixels whose chromaticity is common on the mat (``PadFinder.mask``);
+2. 4-connected blobs of them (the white arcs and grey H are holes);
+3. each blob pixel's ray cast onto the floor, in the camera's level frame (F forward, L left),
+   for a camera ONE metre above the floor, weighted by the floor area it covers.
+
+Floor positions scale with the camera's height, so ``candidates`` needs no height: the mission,
+which knows it, scales them and checks the size (``pick_pad``). A mono image finds nothing: in
+brightness alone the cyan mat is within ~10 % of the orange tarp.
+"""
+from collections import deque
+from dataclasses import dataclass
+import math
+from pathlib import Path
+
+import numpy as np
+
+from overwall_nav.stereo import mount_matrix
+
+BINS = 24
+REFERENCE = Path(__file__).resolve().parent / 'pad_reference.npy'
+FLOOR_RGB = (226, 92, 44)          # the course's orange tarp (goalnav, from photos)
+
+
+@dataclass
+class PadConfig:
+    mat_size: float = 0.85         # m, the mat's side (team estimate)
+    min_side: float = 0.45         # a blob cut off by the frame still counts if this wide ...
+    max_side: float = 1.25
+    min_pixels: int = 25           # ... but its centre is used only if it is >= 0.8 mat_size both ways
+    threshold: float = 0.35        # of the colour model's peak
+    max_width: int = 160           # work on an image this wide at most (speed)
+
+
+def chromaticity(rgb):
+    rgb = np.asarray(rgb, float)
+    total = rgb.sum(axis=-1, keepdims=True) + 1.0
+    return rgb[..., :2] / total, total[..., 0]
+
+
+def _bins(rg):
+    return np.clip((rg * BINS / 0.8).astype(int), 0, BINS - 1)
+
+
+class PadFinder:
+    def __init__(self, reference=None, config=None):
+        self.cfg = config or PadConfig()
+        self.reference = np.load(REFERENCE) if reference is None else np.asarray(reference)
+        rg, brightness = chromaticity(self.reference.reshape(-1, 3))
+        b = _bins(rg[brightness > 60])                       # dark marks carry no colour
+        hist = np.zeros((BINS, BINS))
+        np.add.at(hist, (b[:, 0], b[:, 1]), 1.0)
+        hist = _blur(hist)
+        hist /= hist.max()
+        fb = _bins(chromaticity(np.array(FLOOR_RGB, float)[None])[0])[0]
+        hist[max(fb[0] - 2, 0):fb[0] + 3, max(fb[1] - 2, 0):fb[1] + 3] = 0.0   # never the tarp
+        self.model = hist
+
+    def mask(self, image):
+        rg, brightness = chromaticity(image)
+        b = _bins(rg)
+        return (self.model[b[..., 0], b[..., 1]] > self.cfg.threshold) & (brightness > 60)
+
+    def candidates(self, image, K, pitch_deg, roll_deg=0.0, undistort=None):
+        """Blobs that lie on the floor: [{'centre': [f, l], 'sides': [short, long], 'touches', 'pixels'}],
+        floor metres per metre of camera height, in the camera's level frame. ``image`` RGB (H, W, 3);
+        ``K`` its 3x3 intrinsics; ``undistort``: optional f(pixels Nx2) -> undistorted pixels."""
+        if np.ndim(image) != 3:
+            return []
+        step = max(1, int(math.ceil(image.shape[1] / self.cfg.max_width)))
+        small = np.asarray(image)[::step, ::step]
+        mask = self.mask(small)
+        K = np.asarray(K, float)
+        fx, fy, cx, cy = K[0, 0], K[1, 1], K[0, 2], K[1, 2]
+        to_level = mount_matrix(pitch_deg, roll_deg)
+        found = []
+        for pixels in _blobs(mask, self.cfg.min_pixels):
+            uv = np.column_stack([(pixels[:, 1] + 0.5) * step, (pixels[:, 0] + 0.5) * step])
+            if undistort is not None:
+                uv = undistort(uv)
+            rays = np.column_stack([(uv[:, 0] - cx) / fx, (uv[:, 1] - cy) / fy, np.ones(len(uv))]) @ to_level.T
+            down = rays[:, 2] < -1e-3
+            if down.mean() < 0.95:
+                continue                                     # not on the floor
+            t = 1.0 / -rays[down, 2]
+            points = rays[down, :2] * t[:, None]
+            area = t ** 2 / np.abs(rays[down, 2])            # near pixels cover less floor
+            centre = np.average(points, axis=0, weights=area)
+            spread = np.sqrt(12.0 * np.clip(np.linalg.eigvalsh(np.cov((points - centre).T, aweights=area)), 0, None))
+            touches = bool(pixels[:, 0].min() == 0 or pixels[:, 1].min() == 0
+                           or pixels[:, 0].max() == mask.shape[0] - 1 or pixels[:, 1].max() == mask.shape[1] - 1)
+            found.append({'centre': [float(centre[0]), float(centre[1])],
+                          'sides': [float(spread.min()), float(spread.max())],
+                          'touches': touches, 'pixels': int(len(pixels))})
+        return found
+
+
+def pick_pad(candidates, cam_height, config=None):
+    """(forward, left) metres from the camera to the mat's centre, or None: the largest candidate
+    that is mat-sized at this camera height and, if cut off by the frame, still nearly whole."""
+    cfg = config or PadConfig()
+    best = None
+    for c in candidates or ():
+        short, long_ = (float(s) * cam_height for s in c['sides'])
+        if long_ > cfg.max_side or short < (cfg.min_side if c.get('touches') else 0.6 * cfg.mat_size):
+            continue
+        if c.get('touches') and short < 0.8 * cfg.mat_size:
+            continue                                         # cut off: its centre is not the mat's
+        if best is None or c.get('pixels', 0) > best.get('pixels', 0):
+            best = c
+    if best is None:
+        return None
+    return (float(best['centre'][0]) * cam_height, float(best['centre'][1]) * cam_height)
+
+
+def _blur(h):
+    out = h.copy()
+    for axis in (0, 1):
+        out = out + 0.5 * (np.roll(out, 1, axis) + np.roll(out, -1, axis))
+    return out
+
+
+def _blobs(mask, min_pixels):
+    """4-connected components of a small boolean image, largest first."""
+    seen = np.zeros_like(mask)
+    found = []
+    h, w = mask.shape
+    for start in zip(*np.nonzero(mask)):
+        if seen[start]:
+            continue
+        queue, pixels = deque([start]), []
+        seen[start] = True
+        while queue:
+            i, j = queue.popleft()
+            pixels.append((i, j))
+            for a, b in ((i + 1, j), (i - 1, j), (i, j + 1), (i, j - 1)):
+                if 0 <= a < h and 0 <= b < w and mask[a, b] and not seen[a, b]:
+                    seen[a, b] = True
+                    queue.append((a, b))
+        if len(pixels) >= min_pixels:
+            found.append(np.array(pixels))
+    return sorted(found, key=len, reverse=True)

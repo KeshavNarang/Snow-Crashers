@@ -7,6 +7,7 @@ setup(
     name=package_name,
     version='0.1.0',
     packages=[package_name],
+    package_data={package_name: ['pad_reference.npy']},
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
@@ -25,6 +26,7 @@ setup(
             'stereo_depth = overwall_nav.stereo_depth_node:main',
             'overwall_mission = overwall_nav.mission_node:main',
             'sensor_check = overwall_nav.sensor_check_node:main',
+            'pad_detect = overwall_nav.pad_detect_node:main',
         ],
     },
 )
