@@ -25,3 +25,7 @@ class SlowEnoughForTheSensors(unittest.TestCase):
     def test_no_faster_than_a_quarter_metre_a_second(self):
         self.assertLessEqual(self.safe['max_speed'], 0.25)
         self.assertTrue(all(v <= 0.25 for v in self.safe['kind_speed'].values()))
+
+    def test_the_return_home_is_slow_too(self):
+        # MissionConfig's return_speed default is 1.2 m/s: the same late depth and vision on the way back.
+        self.assertLessEqual(self.safe.get('return_speed', 1.2), 0.4)

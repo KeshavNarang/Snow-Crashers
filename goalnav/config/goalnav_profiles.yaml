@@ -15,7 +15,7 @@
 safe:                     # reliability first: the run that must finish
   cruise_height: 1.15     # over the stands' struts; below the 1.73 m wall tops
   pad_rest_s: 0.5        # down on the pad 0.5 s, then climb: PX4 auto-disarms after 2 s landed
-  max_speed: 0.4         # slow: Jetson depth ~3-4 Hz, 0.4 s old (2026-11-07); was 0.6
+  max_speed: 0.25        # slow: depth 3.75-4 Hz, vision up to 0.32 s late (2026-11-08); 3 min allowed
   radius: 0.42
   hard_radius: 0.33       # body + 5 cm: the map is a few cm off a real tarp
   soft: 0.80
@@ -23,8 +23,9 @@ safe:                     # reliability first: the run that must finish
   net_margin: 0.08       # the net is invisible: a bigger keep-out than any wall
   turn_speed: 0.25
   braking: 1.4
-  reaction_s: 0.3
-  kind_speed: {tube: 0.35, opening: 0.2, gap: 0.35, reach: 0.2, pad: 0.4}   # reach: the dead end by the net, overshoot < 5 cm
+  return_speed: 0.4      # the way back too (MissionConfig default 1.2 m/s)
+  reaction_s: 0.7        # a late depth frame (0.27 s) + late vision (0.32 s) + 0.1: stop within what was seen
+  kind_speed: {tube: 0.2, opening: 0.15, gap: 0.2, reach: 0.15, pad: 0.25}   # reach: the dead end by the net, overshoot < 5 cm
   repel_reach: 0.44
   repel_gain: 2.5
   max_accel: 1.5
