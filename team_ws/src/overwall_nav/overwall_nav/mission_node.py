@@ -3,6 +3,7 @@
     subscribe  /skybeta/state                  JSON from flight_interface
     subscribe  /visual_slam/tracking/odometry  heading at the start
     subscribe  /overwall/front                 JSON from stereo_depth
+    subscribe  /overwall/pad                   JSON from pad_detect (optional: without it, no pad search)
     publish    /skybeta/setpoint/pose, /skybeta/setpoint/twist
 
 Never /fmu/in/*, never arms, never changes mode.
@@ -32,12 +33,13 @@ class OverWallNode(Node):
         for name in names:
             self.declare_parameter(name, getattr(defaults, name))
         self.mission = Mission(Params(**{n: self.get_parameter(n).value for n in names}))
-        self.state = self.odom = self.front = None
+        self.state = self.odom = self.front = self.pad = None
         self.pose_pub = self.create_publisher(PoseStamped, '/skybeta/setpoint/pose', 10)
         self.twist_pub = self.create_publisher(TwistStamped, '/skybeta/setpoint/twist', 10)
         self.create_subscription(String, '/skybeta/state', self.state_cb, 10)
         self.create_subscription(Odometry, '/visual_slam/tracking/odometry', self.odom_cb, 10)
         self.create_subscription(String, '/overwall/front', self.front_cb, 10)
+        self.create_subscription(String, '/overwall/pad', self.pad_cb, 10)
         # PX4's heading, read only (as flight_interface does): the heading the mission holds.
         try:        # the same topic flight_interface resolves for this px4_msgs generation
             from skybeta_flight_interface.topics import resolve_endpoints
@@ -86,12 +88,20 @@ class OverWallNode(Node):
         front['received'] = self.now_s()
         self.front = front
 
+    def pad_cb(self, msg):
+        try:
+            pad = json.loads(msg.data)
+        except ValueError:
+            return
+        pad['received'] = self.now_s()
+        self.pad = pad
+
     def tick(self):
         now = self.now_s()
         if self.odom is not None:
             fresh = self.px4_heading is not None and now - self.px4_heading[1] < 1.0
             self.odom['px4_yaw'] = yaw_enu_from_ned(self.px4_heading[0]) if fresh else None
-        command = self.mission.step(now, self.state, self.odom, self.front)
+        command = self.mission.step(now, self.state, self.odom, self.front, self.pad)
         for line in self.mission.log:
             self.get_logger().info(f'[{self.mission.phase}] {line}')
         self.mission.log.clear()

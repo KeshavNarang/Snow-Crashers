@@ -1,4 +1,6 @@
 # human notes:
+
+> Current cross-project guidance: [docs/FLIGHT.md](../docs/FLIGHT.md) and [docs/STATUS.md](../docs/STATUS.md). The user confirms several successful simple up-and-move flights. Historical boot state, parameter issues and restrictions below are not a live inspection.
 code stored in: cd ~/team_ws/src
 Run to set the flags:  ~/team_ws/run_mission.sh snowcrashers_nav low_test.launch.py
 
@@ -35,8 +37,7 @@ and the troubleshooting table below.
 
 It flew on the first attempt once these were right:
 
-- **Nothing on the drone started by itself.** Autostart was not installed. `run_mission.sh`
-  (or `sudo host/autostart.sh enable`) fixes that for good.
+- **Autostart was initially absent; later sessions record it enabled.** Check the live service. `run_mission.sh` only selects the mission; `sudo host/autostart.sh enable` separately installs/enables and starts the service.
 - **Arming alone never starts the code. The switch to Position after arming does.** The
   sequence is Altitude, arm, Position within 3 s. Arming with the switch already on Position,
   or in Manual without the switch change, gives no autonomy.
@@ -47,8 +48,7 @@ It flew on the first attempt once these were right:
   and replugging both batteries fixed it.
 - **The stack is slow to start:** up to about 3 minutes after power-up (it waits for the clock to
   sync). Wait for `PX4 link up` before arming.
-- **The log is lost on a power cycle.** It lives in the stack's container. After a failed
-  attempt, leave the drone powered and read the `auto offboard:` lines first.
+- **Container screen history may be lost on restart.** Read the `auto offboard:` lines before cycling power. Goalnav's recorder writes persistent files under the mounted `~/team_ws/logs/`; those survive container recreation.
 - **Check `drone.env` before each session.** It had been switched back to the other launch file
   between attempts. `grep COMPETITOR /etc/skybeta/drone.env` shows what will run.
 - **Known issue on the 0.5 m test:** PX4's height estimate read 0.3 to 0.45 m below the camera's
@@ -86,7 +86,7 @@ If you don't see it, stop and look in [Something went wrong](#something-went-wro
 ## What you need
 
 - A laptop on the **DroneHacks** Wi-Fi.
-- The drone's password 2rich.
+- The drone login credentials from the local `.secrets/skybeta-03.env` file; do not copy them into documentation.
 - A charged battery.
 - A **safety pilot** with the RC transmitter, who knows the kill switch (channel 5).
 - For real flights: props, good light, a floor with texture (not plain white), and clear space:
