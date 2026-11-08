@@ -1,0 +1,6 @@
+# Shell scripts must keep LF line endings, or bash fails on Windows checkouts
+# (core.autocrlf=true turns them into CRLF: "$'\r': command not found").
+*.sh text eol=lf
+tools/drone text eol=lf
+tools/drone-lock text eol=lf
+tools/fly text eol=lf
