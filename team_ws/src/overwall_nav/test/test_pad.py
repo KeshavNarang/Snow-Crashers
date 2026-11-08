@@ -26,8 +26,17 @@ PITCH = 27.0
 MAT = 0.85
 
 
-def render(cam_height, mat=None, seed=0):
-    """Colour image (H, W, 3) uint8. mat: (forward, left, yaw_deg) of its centre from the camera."""
+LADDER_RGB = (31.0, 152.0, 172.0)      # the mat's own cyan (mean of the reference): the worst case
+
+
+def _local(f, l, centre_f, centre_l, yaw_deg):
+    c, s = math.cos(math.radians(yaw_deg)), math.sin(math.radians(yaw_deg))
+    return c * (f - centre_f) + s * (l - centre_l), -s * (f - centre_f) + c * (l - centre_l)
+
+
+def render(cam_height, mat=None, seed=0, ladders=()):
+    """Colour image (H, W, 3) uint8. mat: (forward, left, yaw_deg) of its centre from the camera.
+    ladders: (forward, left, yaw_deg, width, length) lying flat: two 4 cm rails, 3 cm rungs every 0.25 m."""
     w, h = SIZE
     u, v = np.meshgrid(np.arange(w) + 0.5, np.arange(h) + 0.5)
     rays = np.stack([(u - K[0, 2]) / K[0, 0], (v - K[1, 2]) / K[1, 1], np.ones_like(u)], axis=-1)
@@ -51,13 +60,20 @@ def render(cam_height, mat=None, seed=0):
         i = np.clip(((a[inside] / MAT + 0.5) * n).astype(int), 0, n - 1)
         j = np.clip(((b[inside] / MAT + 0.5) * n).astype(int), 0, n - 1)
         img[inside] = ref[i, j] * np.nan_to_num(shade, nan=1.0)[inside][:, None]
+    for lf, ll, lyaw, width, length in ladders:
+        a, b = _local(f, l, lf, ll, lyaw)                         # a along the ladder, b across
+        inside = down & (np.abs(a) < length / 2) & (np.abs(b) < width / 2)
+        rail = np.abs(b) > width / 2 - 0.04
+        rung = np.abs(((a + length / 2) % 0.25) - 0.125) < 0.015
+        blue = inside & (rail | rung)
+        img[blue] = np.array(LADDER_RGB) * np.nan_to_num(shade, nan=1.0)[blue][:, None]
     img[~down] = (120.0, 120.0, 125.0)
     img += rng.normal(0.0, 4.0, img.shape)
     return np.clip(img, 0, 255).astype(np.uint8)
 
 
-def find(cam_height, mat=None):
-    candidates = PadFinder().candidates(render(cam_height, mat), K, PITCH)
+def find(cam_height, mat=None, ladders=()):
+    candidates = PadFinder().candidates(render(cam_height, mat, ladders=ladders), K, PITCH)
     return pick_pad(candidates, cam_height)
 
 
@@ -75,6 +91,33 @@ class PadTest(unittest.TestCase):
         # 1.9 m ahead: its near half is below the image (floor seen from ~1.75 m). A centre from
         # the visible half would be ~0.2 m long: the mission must not land on that.
         self.assertIsNone(find(2.0, (1.9, 0.0, 0.0)))
+
+    def test_blue_ladder_is_not_the_pad(self):
+        # Team report, 2026-11-07: past the wall a ladder as blue as the mat sits next to it and a
+        # flight landed on it. A 0.5 x 1.1 m section fits the size gate (0.45-1.25 m); it is not a
+        # solid square, so it must be refused.
+        self.assertIsNone(find(0.8, None, ladders=[(1.3, 0.0, 20.0, 0.5, 1.1)]))
+
+    def test_pad_beside_the_ladder_is_still_found(self):
+        got = find(0.8, (1.5, -0.35, 10.0), ladders=[(1.3, 0.75, 75.0, 0.5, 1.1)])   # 15 cm clear of the mat
+        self.assertIsNotNone(got)
+        self.assertAlmostEqual(got[0], 1.5, delta=0.08)
+        self.assertAlmostEqual(got[1], -0.35, delta=0.08)
+
+    def test_real_mat_colour_under_the_hall_lights(self):
+        # photos/New_Ladder_1.jpeg (2026-11-07, the net, the mat and the blue ladder): the old colour
+        # model (a histogram of the reference picture) marked 9 % of the real mat there, so the
+        # flights saw "0 blue blobs" and landed at the set distance, by the ladder. The mask must
+        # cover most of the mat (net strands, the dark pixels, excluded).
+        photo = Path(__file__).resolve().parents[4] / 'photos' / 'New_Ladder_1.jpeg'
+        if not photo.exists():
+            self.skipTest('photos/ not on this machine')
+        import cv2
+        small = cv2.resize(cv2.imread(str(photo)), (675, 900))
+        rgb = small[..., ::-1]
+        box = (slice(690, 790), slice(30, 190))                      # inside the mat, bottom left
+        lit = rgb[box].max(axis=-1) >= 50                            # not a net strand
+        self.assertGreater(PadFinder().mask(rgb)[box][lit].mean(), 0.6)
 
     def test_bare_tarp_is_not_a_pad(self):
         self.assertIsNone(find(0.8, None))

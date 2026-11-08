@@ -50,7 +50,9 @@ def generate_launch_description():
     os.makedirs(run_dir, exist_ok=True)
     logging = [
         SetEnvironmentVariable('ROS_LOG_DIR', run_dir),            # every node's log file goes here
-        ExecuteProcess(cmd=['ros2', 'bag', 'record', '-s', 'mcap', '-o', os.path.join(run_dir, 'bag')] + BAG_TOPICS,
+        # No write cache (default 100 MB in memory): a power-off lost the whole flight's bag.
+        ExecuteProcess(cmd=['ros2', 'bag', 'record', '-s', 'mcap', '--max-cache-size', '0',
+                            '-o', os.path.join(run_dir, 'bag')] + BAG_TOPICS,
                        output='log', condition=IfCondition(LaunchConfiguration('record'))),
     ]
     flight_interface = Node(
