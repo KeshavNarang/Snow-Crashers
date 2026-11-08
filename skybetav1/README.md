@@ -1,5 +1,7 @@
 # skybeta
 
+> Team status update (2026-11-07): several simple real flights succeeded. For the team's current deployment, camera and competition guidance, start at [docs/README.md](../docs/README.md). Historical “not flown” claims below describe the organizer stack at the time of writing, not current team flight evidence.
+
 A GPS-denied autonomy stack for a Jetson Orin Nano paired with a Pixhawk 6C, shipped as
 one container image. **Write your navigation code in `~/team_ws/src` on your drone**:
 everything below your setpoints is already built, measured and documented.
@@ -73,8 +75,7 @@ value.
 
 - **A safety pilot on RC is always there**, and can take the vehicle back at any time. Nothing
   you write may assume otherwise.
-- **Run new code with the props off first**, then low and tethered. A hover on visual odometry
-  has not flown on any airframe yet, so your first runs are the test.
+- **Run new code with the props off first**, then low and tethered. The team has completed several successful simple real flights; a new goalnav/cheese mission still needs its own validation.
 - **Do not publish to `/fmu/in/*`** and do not modify `skybeta_flight_interface`. Send setpoints
   through `/skybeta/setpoint/*`.
 - **Do not change `DRONE_ID`, `ROS_DOMAIN_ID` or `TEAM`** in `/etc/skybeta/drone.env`, or the
@@ -159,7 +160,7 @@ behaviour.
 1. **Power up and keep the drone still for the first minute.** The stack starts by itself, and
    position and heading are measured from wherever the drone was when it started.
 2. **Your node starts publishing setpoints** in the `competitor` window of the stack.
-3. **The safety pilot arms, then switches to Position.** The Jetson has no way to arm the vehicle.
+3. **The safety pilot arms, then switches to Position.** The supplied flight interface has no arm service; the pilot arms the vehicle.
 4. **The Jetson enters Offboard once, and your code takes off and flies.** The flight interface
    clamps altitude and twist speed and sends your setpoints to PX4. It does not limit how far
    you go horizontally: staying inside the flying area is your code's job and the pilot's.

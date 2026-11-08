@@ -10,6 +10,12 @@ cell needs a quarter of the points: min_cell 10) is traced, with the 27 deg down
 the floor and the wall box; ranges get stereo noise (sigma = Z^2 / (f B) * 0.2 px); scattered
 false matches are added in the top rows; then the points are binned with perception.bin_points.
 
+Colour camera (only with ``pad=``): what pad_detect would publish. The mat's four corners are
+cast into skybeta-03's colour camera (640x400, fx 489.6, 27 deg down); when all four are in the
+image and none is hidden behind the wall, the mat is reported (its centre per metre of camera
+height, with 2 cm of noise), as pad.PadFinder does. The heading follows the mission's yaw
+setpoint at up to 60 deg/s (PX4's MPC_YAWRAUTO_MAX default is 45-60).
+
 Also modelled: a VIO frame tilted by the camera mount (the stack's TF says the camera is level).
 PX4 then sees sin(tilt) metres of false forward/backward motion per metre of climb.
 """
@@ -60,7 +66,11 @@ class World:
     def __init__(self, wall_at=2.5, wall_height=1.0, wall_thickness=0.1, wall_textured=True,
                  background_at=3.0, yaw_deg=20.0, start=(0.3, -0.2, 0.0), arm_at=4.0, switch_at=6.0,
                  takeover_at=None, depth=True, depth_dropout=None, local_offset_z=0.0, vio_tilt_deg=0.0,
-                 spurious=60, params=None, seed=1, floor_fit=None, wall_bottom=0.0, crossbar=None):
+                 spurious=60, params=None, seed=1, floor_fit=None, wall_bottom=0.0, crossbar=None,
+                 pad=None, pad_feed=None):
+        self.pad = pad                          # (along, left, yaw_deg) of the mat from the start, or None
+        self.pad_feed = pad is not None if pad_feed is None else pad_feed   # pad_detect running
+        self.pad_msg = None
         self.crossbar = crossbar                # (bottom, top, protrusion) m: a bar standing out of the wall
         self.wall_bottom = wall_bottom          # the wall face starts this high: a hole below it
         self.floor_fit = floor_fit
@@ -72,6 +82,7 @@ class World:
         self.t, self.p, self.v = 0.0, list(start), [0.0, 0.0, 0.0]
         self.origin = tuple(start)
         self.yaw = math.radians(yaw_deg)
+        self.heading = self.yaw                 # the drone's real heading (follows hold_yaw)
         self.f = (math.cos(self.yaw), math.sin(self.yaw))
         self.wall = (wall_at, wall_thickness, wall_height) if wall_at is not None else None
         self.wall_textured, self.background_at, self.spurious = wall_textured, background_at, spurious
@@ -138,6 +149,39 @@ class World:
             pts = np.vstack([pts, pick * self.np_rng.uniform(0.25, 0.45, (self.spurious, 1))])
         return bin_points(pts, 0.4)
 
+    def pad_view(self, p):
+        """pad_detect's message for a drone at p (heading self.heading): the mat when wholly seen."""
+        if not self.pad:
+            return {'candidates': []}
+        along_p, left_p = self.along(p), (p[1] - self.origin[1]) * self.f[0] - (p[0] - self.origin[0]) * self.f[1]
+        rel = self.heading - self.yaw
+        cam_a = along_p + CAM_FORWARD * math.cos(rel)
+        cam_l = left_p + CAM_FORWARD * math.sin(rel)
+        cam_u = p[2] + CAM_GROUND
+        pa, pl, pyaw = self.pad
+        c, s = math.cos(math.radians(pyaw)), math.sin(math.radians(pyaw))
+        to_cam = np.linalg.inv(mount_matrix(PITCH))
+        for da, db in ((0.425, 0.425), (0.425, -0.425), (-0.425, 0.425), (-0.425, -0.425)):
+            ca, cl = pa + c * da - s * db, pl + s * da + c * db            # corner, start frame
+            # into the camera's level frame (F along the heading, L left)
+            va, vl = ca - cam_a, cl - cam_l
+            f = va * math.cos(rel) + vl * math.sin(rel)
+            l = -va * math.sin(rel) + vl * math.cos(rel)
+            x, y, z = to_cam @ np.array([f, l, -cam_u])
+            if z <= 0 or not (0 <= 489.6 * x / z + 320 < 640 and 0 <= 489.3 * y / z + 200 < 400):
+                return {'candidates': []}
+            if self.wall:                                                  # hidden behind the wall?
+                near, thick, height = self.wall
+                for wa in (near, near + thick):
+                    if min(cam_a, ca) < wa < max(cam_a, ca):
+                        if cam_u + (wa - cam_a) / (ca - cam_a) * (0.0 - cam_u) < height:
+                            return {'candidates': []}
+        va, vl = pa - cam_a, pl - cam_l
+        f = va * math.cos(rel) + vl * math.sin(rel) + self.np_rng.normal(0, 0.02)
+        l = -va * math.sin(rel) + vl * math.cos(rel) + self.np_rng.normal(0, 0.02)
+        side = 0.85 / cam_u
+        return {'candidates': [{'centre': [f / cam_u, l / cam_u], 'sides': [side, side], 'touches': False}]}
+
     # -- interface ---------------------------------------------------------------
     def take(self, command):
         if command is None:
@@ -189,6 +233,9 @@ class World:
                 # PX4 holds the *reported* position: a climb shifts the real one along the heading.
                 want[0] += self.tilt * self.v[2] * self.f[0]
                 want[1] += self.tilt * self.v[2] * self.f[1]
+        if self.armed and self.nav == OFFBOARD and self.mission.hold_yaw is not None and self.took_off_at is not None:
+            err = math.atan2(math.sin(self.mission.hold_yaw - self.heading), math.cos(self.mission.hold_yaw - self.heading))
+            self.heading += max(-math.radians(60) * DT, min(math.radians(60) * DT, err))
         for k in range(3):
             self.v[k] += (want[k] - self.v[k]) * min(1.0, DT / 0.25)
         if self.p[2] <= 1e-6 and self.v[2] < 0:
@@ -234,8 +281,8 @@ class World:
                               'offboard_active': self.nav == OFFBOARD, 'origin_enu': list(self.origin),
                               'local_enu': self.reported(self.p), 'received': self.t}
             if i % 2 == 0:
-                self.odom = {'position': tuple(self.reported(self.p)), 'yaw': self.yaw + 0.05,
-                             'px4_yaw': self.yaw, 'received': self.t}
+                self.odom = {'position': tuple(self.reported(self.p)), 'yaw': self.heading + 0.05,
+                             'px4_yaw': self.heading, 'received': self.t}
             dropped = self.depth_dropout and self.depth_dropout[0] <= self.t < self.depth_dropout[1]
             if self.depth and not dropped and i % 5 == 0:      # 10 Hz, 0.1 s old
                 seen_from = self.history[0]
@@ -245,9 +292,12 @@ class World:
                     floor = {'pitch_deg': self.floor_fit[0], 'height_m': self.floor_fit[1]}
                 self.front = {'cells': self.cells(seen_from), 'top_edge_deg': TOP_EDGE, 'floor': floor,
                               'pitch_deg': PITCH, 'received': self.t}
+            if self.pad_feed and i % 10 == 5:                 # 5 Hz, 0.1 s old
+                self.pad_msg = dict(self.pad_view(self.history[-5] if len(self.history) >= 5 else self.p),
+                                    received=self.t)
             if i % 5 == 0:
                 phase = self.mission.phase
-                self.take(self.mission.step(self.t, self.state, self.odom, self.front))
+                self.take(self.mission.step(self.t, self.state, self.odom, self.front, self.pad_msg))
                 if self.mission.phase in self.mission.FLYING:
                     self.held.append(self.mission.hold_yaw)
                 for line in self.mission.log:
@@ -437,6 +487,40 @@ class OverWallTest(unittest.TestCase):
         self.assertEqual(w.contacts, 0, w.log())
         self.assertFalse(w.armed, w.log())
         self.assertTrue(w.along() < 0.686 - BODY_HALF_LENGTH or w.along() - BODY_HALF_LENGTH > 0.686 + 0.1, w.log())
+
+    def landed_miss(self, w):
+        """Distance from the drone's centre to the mat's centre, on the floor."""
+        left = (w.p[1] - w.origin[1]) * w.f[0] - (w.p[0] - w.origin[0]) * w.f[1]
+        return math.hypot(w.along() - w.pad[0], left - w.pad[1])
+
+    COURSE_WALL = dict(wall_at=0.686, wall_height=1.6, wall_bottom=0.3)
+
+    def test_course_lands_on_the_pad_it_sees(self):
+        # The pad is not where land_beyond_wall_m says (6 ft 2 in past the wall, on the centreline):
+        # 0.35 m further, 0.35 m to the left, turned 25 deg. Rule 5: the whole drone inside the
+        # pad's ring, so the centre must come down on the mat's centre, not at the set distance.
+        w = World(**self.COURSE_WALL, pad=(0.686 + 1.88 + 0.35, 0.35, 25.0), params=self.COURSE).run(120.0)
+        self.assertLandedBeyond(w)
+        self.assertLess(self.landed_miss(w), 0.15, w.log())
+        self.assertIn('Pad seen', w.log())
+
+    def test_pad_off_to_the_side_is_found_by_the_sweep(self):
+        # The mat 1.1 m to the left: out of the colour camera's +-33 deg from the look point.
+        # One +-35 deg sweep brings it in (the user's choice: search, then land).
+        w = World(**self.COURSE_WALL, pad=(0.686 + 1.7, 1.1, 0.0), params=self.COURSE).run(140.0)
+        self.assertLandedBeyond(w)
+        self.assertIn('Sweeping', w.log())
+        self.assertLess(self.landed_miss(w), 0.15, w.log())
+
+    def test_pad_never_seen_lands_at_the_set_distance(self):
+        # pad_detect runs but the mat is nowhere: sweep once, then land 6 ft 2 in past the wall
+        # as before, the heading back on the start heading.
+        w = World(**self.COURSE_WALL, pad_feed=True, params=self.COURSE).run(140.0)
+        self.assertLandedBeyond(w)
+        self.assertIn('Sweeping', w.log())
+        self.assertIn('not seen', w.log())
+        self.assertAlmostEqual(w.along(), 0.686 + 1.880, delta=0.2, msg=w.log())
+        self.assertAlmostEqual(w.heading, w.yaw, delta=math.radians(3), msg=w.log())
 
     def test_param_guards(self):
         with self.assertRaises(ValueError):
