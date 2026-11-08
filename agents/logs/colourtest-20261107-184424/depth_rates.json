@@ -1,0 +1,23 @@
+{
+ "(640, 400) @ 30": {
+  "depth": 29.4,
+  "left": 29.4,
+  "colour": 14.9,
+  "valid_fraction": 0.212,
+  "median_mm": 600.0
+ },
+ "(1024, 640) @ 30": {
+  "depth": 21.5,
+  "left": 21.5,
+  "colour": 14.9,
+  "valid_fraction": 0.137,
+  "median_mm": 668.0
+ },
+ "(1280, 800) @ 30": {
+  "depth": 15.9,
+  "left": 15.9,
+  "colour": 14.9,
+  "valid_fraction": 0.11,
+  "median_mm": 782.0
+ }
+}

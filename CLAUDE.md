@@ -18,7 +18,14 @@ The pipeline that actually flies on skybeta-03 is `team_ws/src/overwall_nav` (an
 
 ## Evals first (the workflow)
 
-Write the eval before the code. For every fix or feature:
+**Always run the evals before any code is written** that changes behaviour (code, or config that can
+change what the drone does). Docs, comments, logs and renames need no new eval. Writing behaviour code
+before its eval exists is the one thing this repo does not do. **Evals are a means, not the work: they are
+bounded by "Budgets and anti-gaming" below.** For every fix or feature:
+0. **Run the existing suite first** to get a baseline, so you know what was green before you touched
+   anything (`cd team_ws/src/overwall_nav && python -m unittest discover -s test`; mission tests need
+   `PYTHONPATH=../../../skybetav1/src/skybeta_flight_interface`). Profile before optimising: measure where
+   the time goes, then write the eval for that.
 1. **Write the eval first** and run it on the current code. It must fail for the right reason.
    For a bug, build a case that reproduces what was seen on the drone, and add a check that the
    old behaviour really is the bug, so the eval cannot pass by accident.
@@ -28,10 +35,63 @@ Write the eval before the code. For every fix or feature:
    happen (e.g. the fix hiding a real fault).
 4. **Run the whole suite** before committing, and again on the drone's own Python if the change
    touches the Jetson (tests under `team_ws/src/overwall_nav/test/`, `tools/drone_tools/`).
+   For a speed-up, keep a FROZEN copy of the old function in the test and assert same answers plus a
+   speed ratio in the same process (see `test/test_floorfit_speed.py`).
 5. **Measure on the drone** only after the evals pass, and record numbers in `agents/logs/`.
    A measurement taken in the first ~5 minutes after boot is warm-up, not steady state.
 Use a git worktree (`git worktree add ../<name> -b agent/<topic> origin/main`) rather than
 switching branches in the shared checkout; other sessions work in it.
+
+## Budgets and anti-gaming (hard limits)
+
+Evals exist to catch a real failure, not to look thorough. These limits are hard: at a limit, STOP, write
+what is done and what is left in `agents/logs/`, and ask the user before going on. Note the start time in
+the log when you begin a task.
+
+**Time (wall clock, whole task from first command to merged PR, evals included)**
+| Task | Limit | of which evals + benchmarks at most |
+|---|---|---|
+| Docs / config note / log | 15 min | none required |
+| Bug fix | 45 min | 15 min |
+| Speed-up or refactor | 60 min | 20 min |
+| New feature or tool | 90 min | 30 min |
+| Research / scoring candidates | 30 min | n/a |
+| One drone bench session (lock held) | 30 min | n/a, release the lock at the end |
+| Landing a PR (merge, conflicts, cleanup) | 10 min | n/a |
+
+**Size**
+- At most ~8 tests per change, one per distinct requirement or failure seen on the drone. No sweeps
+  "for coverage". A parametrised case counts once only if each row is a different behaviour.
+- Any single eval runs in <= 10 s on a laptop; the whole suite stays <= 2 min. A slower eval needs the
+  user's approval (use a smaller synthetic scene instead).
+- Run only the touched test file while iterating. Run the whole suite exactly twice per change: once
+  for the baseline, once on the merged tree before the PR. Do not re-run an unchanged suite.
+- At most 2 tuning iterations against one eval threshold. If it still fails, report; do NOT loosen the
+  threshold or retune the scene until it passes. If a threshold was wrong, say so in the PR and why.
+- Drone measurements: at most 3 runs per question, <= 10 min each. Do not repeat a benchmark to find a
+  better number, and do not chase an effect smaller than the run-to-run noise you already measured.
+
+**An eval counts only if**
+1. it failed on the current code for the stated reason before the fix (show the failing output), and
+2. it asserts an outcome someone cares about (a measured value, a mission result, a published message),
+   not that the code does what the code does, and
+3. its docstring names the real observation behind it (a log line, a field measurement, a rule number), and
+4. it does not duplicate coverage that already exists, and does not mock the thing under test.
+An eval written only to be green, or kept only to raise the count, is deleted. Tests that exist to "show
+diligence" are the problem this section is here to stop.
+
+## Landing changes (pull requests)
+
+Never push straight to `main`. Work in your own worktree on an `agent/<topic>` branch, then:
+1. Evals green on the merged result: `git fetch && git merge origin/main`, then the whole suite
+   (other branches land often; the shared `agents/STATUS.md` table conflicts every time, keep both rows).
+2. `git push -u origin agent/<topic>`, then `gh pr create --fill` with a body saying what changed, what the
+   evals cover, and what was NOT measured on the drone.
+3. `gh pr merge <n> --merge` once it shows MERGEABLE / CLEAN. To land someone else's branch, merge `main`
+   into it in a throwaway worktree (`git worktree add ../tmp -b tmp/<x> origin/<their-branch>`), push that as a
+   plain fast-forward, merge the PR, and remove the worktree. Never rebase or force-push a branch another
+   session may have checked out.
+4. Remove your worktree when the PR is merged (`git worktree remove ../<name>`).
 
 ## Our test drone
 
@@ -54,6 +114,11 @@ the hostname does not resolve, say so; do not guess other hosts.
 
 ## Safety (non-negotiable)
 
+- **Never stop, restart or kill the stack** (the XRCE agent, the `slam` launch, `skybeta-stack`) unless the user
+  asks: on stock PX4 v1.16.2 the flight controller's TELEM2 link stays dead until the FC is power-cycled
+  (`skybetav1/CLAUDE.md` bug #15; a patched firmware fixes it, not confirmed for skybeta-03). To change the
+  camera driver, swap the driver component inside the running container; see
+  `agents/logs/2026-11-07-depth-camera-plan.md` (branch `agent/depth-camera`).
 - Read-only inspection by default (topics, logs, params). No arming, no motor commands, no
   flight scripts, no PX4 param changes without the user explicitly approving that action.
 - Props off on the bench. A human with RC kill switch watches every flight.
@@ -75,3 +140,7 @@ the hostname does not resolve, say so; do not guess other hosts.
   session can pick up.
 - Simulate first: `goalnav/localsim` (see `goalnav/README.md`). Run `python3 -m pytest` where
   tests exist before pushing.
+
+## Drone lock etiquette
+`tools/drone-lock status` before anything beyond a read-only look. If another agent holds the lock, don't
+take it over and don't add load during its measurements (benchmarks are CPU-sensitive): wait, or ask the user.

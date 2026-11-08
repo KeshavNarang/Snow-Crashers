@@ -17,7 +17,10 @@ stack runs no colour camera), and in brightness alone the mat matches the
 floor, so on the drone the pad is not found yet.
 
 Depth points are placed with the pose received nearest the image's capture
-stamp (both on the ROS clock), so latency does not smear the map.
+stamp (both on the ROS clock), so latency does not smear the map. Each image's
+camera mount comes from the TF (``base_frame`` -> the message's frame, the
+driver's factory calibration); ``camera_offset`` and ``camera_pitch_deg`` are
+the fallback when no TF is published (the simulator).
 """
 from collections import deque
 import json
@@ -29,13 +32,16 @@ import rclpy
 import yaml
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
+from rclpy.time import Time
+from tf2_ros import Buffer, TransformListener
 from geometry_msgs.msg import TwistStamped
 from px4_msgs.msg import VehicleAttitude, VehicleLocalPosition
 from sensor_msgs.msg import CameraInfo, Image, PointCloud2
 from std_msgs.msg import String
 
 from drone_ref.goalnav import skybeta
-from drone_ref.goalnav.geometry import camera_to_odom, ned_to_enu, optical_to_body, px4_attitude_enu
+from drone_ref.goalnav.geometry import (camera_to_odom, ned_to_enu, optical_to_body, px4_attitude_enu,
+                                        quaternion_matrix)
 from drone_ref.goalnav.floor_line import dark_floor_points
 from drone_ref.goalnav.pad_detect import PadDetector
 from drone_ref.goalnav.mission import GoalMission, Telemetry
@@ -47,9 +53,10 @@ PARAMS = {
     'points_topic': '/goalnav/stereo/points',            # drone_ref.stereo_node
     'image_topic': '/goalnav/stereo/left', 'image_info_topic': '/goalnav/stereo/left_info',
     'pad_image_topic': '', 'pad_info_topic': '',          # a colour image for the pad (none on the drone)
-    # The left camera, from skybeta-03's TF (base_link -> oak_left_camera_optical_frame):
-    # (0.105, 0.038, 0.030) m; its pitch 27 deg down (TF 27.6, IMU gravity ~26, overwall_nav 27).
-    'camera_offset': [0.105, 0.038, 0.030], 'camera_pitch_deg': 27.0, 'max_points': 6000,
+    # Fallback mount when the TF has none. skybeta-03's TF (base_link -> oak_left_camera_optical_frame):
+    # (0.106, 0.038, 0.031) m, axis 27.6 deg down, 0.7 deg yaw left, 0.5 deg roll.
+    'base_frame': 'base_link',
+    'camera_offset': [0.105, 0.038, 0.030], 'camera_pitch_deg': 27.6, 'max_points': 6000,
     'min_depth': 0.25, 'max_depth': 6.0, 'control_hz': 50.,
     'profile': 'safe', 'profiles_file': 'config/goalnav_profiles.yaml',
     'tuning': '',            # YAML dict of overrides on the profile, e.g. "{max_speed: 0.7}"
@@ -78,6 +85,9 @@ class GoalNavNode(Node):
         self.mission = GoalMission(spec, *configs)
         self.get_logger().info(f"goalnav profile {p['profile']}: {configs}")
         self.history = deque(maxlen=200)          # (ros time s, position ENU, rotation)
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+        self.mounts = {}                          # frame id -> (offset, optical -> body rotation)
         self.position = self.attitude = None
         self.flight = (False, False, None)        # (armed, offboard, landed) from /skybeta/state
         qos = qos_profile_sensor_data
@@ -122,13 +132,31 @@ class GoalNavNode(Node):
         best = min(self.history, key=lambda h: abs(h[0] - when))
         return best if abs(best[0] - when) < 0.1 else None
 
-    def _camera_pose(self, pose, rectification=None):
-        """(origin, optical -> odom rotation) of the left camera at ``pose``; a
-        rectified image's frame is turned by R (X_rectified = R X_left)."""
-        rotation = pose[2] @ optical_to_body(math.radians(float(self.p['camera_pitch_deg'])))
+    def _mount(self, frame_id):
+        """(offset, optical -> body rotation) of the camera whose optical frame is
+        ``frame_id``: from the TF once it has arrived, else the parameters."""
+        if frame_id in self.mounts:
+            return self.mounts[frame_id]
+        try:
+            tf = self.tf_buffer.lookup_transform(self.p['base_frame'], frame_id, Time()).transform
+        except Exception:   # noqa: BLE001 - no TF (simulator), or not received yet
+            return (np.asarray(self.p['camera_offset'], float),
+                    optical_to_body(math.radians(float(self.p['camera_pitch_deg']))))
+        t, q = tf.translation, tf.rotation
+        mount = np.array([t.x, t.y, t.z]), quaternion_matrix((q.w, q.x, q.y, q.z))
+        down = math.degrees(math.asin(-mount[1][2, 2]))
+        self.get_logger().info(f'{frame_id} mount from TF: offset {np.round(mount[0], 3)} m, {down:.1f} deg down')
+        self.mounts[frame_id] = mount
+        return mount
+
+    def _camera_pose(self, pose, frame_id, rectification=None):
+        """(origin, optical -> odom rotation) of the camera at ``pose``; a
+        rectified image's frame is turned by R (X_rectified = R X_camera)."""
+        offset, mount = self._mount(frame_id)
+        rotation = pose[2] @ mount
         if rectification is not None:
             rotation = rotation @ rectification.T
-        return pose[1] + pose[2] @ np.asarray(self.p['camera_offset'], float), rotation
+        return pose[1] + pose[2] @ offset, rotation
 
     def _points(self, msg):
         """Stereo points (left camera optical frame) into the live map."""
@@ -140,7 +168,7 @@ class GoalNavNode(Node):
         points = points[(distance > float(self.p['min_depth'])) & (distance < float(self.p['max_depth']))]
         if len(points) > int(self.p['max_points']):
             points = points[np.linspace(0, len(points) - 1, int(self.p['max_points'])).astype(int)]
-        origin, rotation = self._camera_pose(pose)
+        origin, rotation = self._camera_pose(pose, msg.header.frame_id)
         world = points.astype(float) @ rotation.T + origin
         self.mission.add_depth(origin, world)
         if self.mission.floor is not None:
@@ -174,7 +202,7 @@ class GoalNavNode(Node):
         channels = 3 if msg.encoding in ('rgb8', 'bgr8') else 1
         image = np.frombuffer(bytes(msg.data), dtype=np.uint8).reshape(msg.height, msg.width, channels)
         image = image[..., ::-1] if msg.encoding == 'bgr8' else image
-        origin, rotation = self._camera_pose(pose, camera[4])
+        origin, rotation = self._camera_pose(pose, msg.header.frame_id, camera[4])
         return (image if channels == 3 else image[..., 0]), camera[:4], origin, rotation
 
     def _image(self, msg):

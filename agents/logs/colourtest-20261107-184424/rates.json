@@ -1,0 +1,21 @@
+{
+ "mono pair only (as the stack runs)": {
+  "left": 29.8,
+  "right": 29.8
+ },
+ "colour 640x400@10 + pair": {
+  "left": 29.5,
+  "right": 29.5,
+  "colour": 9.9
+ },
+ "colour 640x400@30 + pair": {
+  "left": 29.5,
+  "right": 29.5,
+  "colour": 29.5
+ },
+ "colour 1280x720@15 + pair": {
+  "left": 29.5,
+  "right": 29.5,
+  "colour": 14.9
+ }
+}
