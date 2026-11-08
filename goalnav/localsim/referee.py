@@ -2,8 +2,9 @@
 
 Uses simulator truth, never the drone's estimate. Checkpoints use the saved
 drawing's lines with the whole circular footprint (literal rule 7.6) and,
-separately, the drone centre only, because the organizers' adjudication of
-CP1 is unknown. CP4 is credited through Gate B or the window, whichever the
+separately, the drone centre only, on lines widened by HIT_SLACK: checkpoints
+are judged by people watching, by eye, and the whole drone cannot cross CP1
+(0.46 m from the net) at all. CP4 is credited through Gate B or the window, whichever the
 run crossed; the window adds its 5-point bonus on a finished run.
 
 CP5 is judged where the aircraft rests on the floor once disarmed, with the
@@ -16,6 +17,7 @@ crashing. It multiplies a finished run's points by 1.25. The run time is
 end to end, as the judge's stopwatch takes it: from leaving the launch mark
 to the return's disarm on it (or the pad disarm without a return).
 """
+from dataclasses import replace
 import math
 
 from drone_ref.checkpoint_contract import load_event_reference
@@ -24,17 +26,29 @@ from drone_ref.scoring import score_run
 
 ROUTES = ('gate_b', 'window')
 JUDGES = {'strict': None, 'centre': 1e-3}
+# Checkpoints are judged by people watching, by eye: the centre judge's lines
+# are this much wider each end and this far back toward the approach (the
+# strict judge keeps the drawing).
+HIT_SLACK = 0.15
 RETURN_TOLERANCE = 0.6096      # 2 ft
 TIME_LIMIT = 180.
 
 
+def _widened(line, slack=HIT_SLACK):
+    """A checkpoint line ``slack`` longer each end and ``slack`` back toward
+    the approach side."""
+    a, b = (tuple(map(float, p)) for p in (line.start_xy, line.end_xy))
+    n = line.forward_normal_xy
+    length = math.dist(a, b)
+    t = ((b[0] - a[0]) / length, (b[1] - a[1]) / length)
+    move = lambda p, sign: (p[0] + sign * t[0] * slack - n[0] * slack, p[1] + sign * t[1] * slack - n[1] * slack)
+    return replace(line, start_xy=move(a, -1), end_xy=move(b, 1))
+
+
 class Referee:
     def __init__(self, course, footprint_radius, crash_speed=1.0, crash_drop_speed=2.0, touchdown=True):
-        self.lines = {route: load_event_reference(course, route=route).checkpoints for route in ROUTES}
-        self.monitors = {(judge, route): CheckpointMonitor(self.lines[route], radius or footprint_radius)
-                         for judge, radius in JUDGES.items() for route in ROUTES}
-        self.crossings = {key: {} for key in self.monitors}
         self.radius = footprint_radius
+        self.use_lines({route: load_event_reference(course, route=route).checkpoints for route in ROUTES})
         self.touchdown = touchdown       # CP5 on resting on the pad armed (the team's reading), not only disarmed
         self.crash_speed = crash_speed
         self.pad = course['landing']
@@ -54,6 +68,15 @@ class Referee:
         self.disarmed = None         # Time since leaving launch of the pad disarm.
         self.contact = None          # (time since leaving launch, xy) of the first floor contact.
         self.rest = None             # xy at rest on the floor, disarmed.
+
+    def use_lines(self, lines):
+        """Judge these checkpoint lines ({route: [Checkpoint]}): the strict
+        judge as drawn, the centre judge widened (HIT_SLACK)."""
+        self.lines = lines
+        judged = {'strict': lines, 'centre': {route: [_widened(c) for c in cps] for route, cps in lines.items()}}
+        self.monitors = {(judge, route): CheckpointMonitor(judged[judge][route], radius or self.radius)
+                         for judge, radius in JUDGES.items() for route in lines}
+        self.crossings = {key: {} for key in self.monitors}
 
     def all_lines(self):
         seen = {}

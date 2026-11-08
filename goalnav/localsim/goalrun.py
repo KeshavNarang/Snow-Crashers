@@ -176,11 +176,7 @@ def main(argv=None):
     camera = Camera(pitch_deg=CAMERA_PITCH_DEG, hfov_deg=77.5, min_depth=0.31)
     cad_course = json.loads((ROOT / 'config/course_v3.json').read_text())
     referee = Referee(cad_course, messy_course.BODY_RADIUS)
-    referee.lines = {route: messy_course.checkpoints(meta, lines) for route, lines in referee.lines.items()}
-    from drone_ref.checkpoints import CheckpointMonitor
-    from localsim.referee import JUDGES
-    referee.monitors = {(judge, route): CheckpointMonitor(referee.lines[route], radius or referee.radius)
-                        for judge, radius in JUDGES.items() for route in referee.lines}
+    referee.use_lines({route: messy_course.checkpoints(meta, lines) for route, lines in referee.lines.items()})
     referee.pad = meta['pad']
     referee._on_pad = lambda xy: on_mat(meta['pad'], xy)      # No ring round the target: rest on the mat.
     referee.launch = tuple(meta['launch']['mark'])
