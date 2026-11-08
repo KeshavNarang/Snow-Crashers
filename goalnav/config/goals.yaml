@@ -66,7 +66,7 @@ return_walls:
   - {name: barrier, wall: [[-2.90, 0.324], [-2.15, 0.402]], offset: 0.725}  # barrier panel 1, west of M1
 # The takeoff's climb is held this far off the launch spot ([right, ahead], m):
 # away from the barrier behind it and the nearly invisible net on its left.
-takeoff_offset: [0.05, 0.25]   # 0.25 ahead: clear of barrier panel 1's stand, turned toward the corridor (2026-11-08)
+takeoff_offset: [0.05, 0.08]
 # Faced while returning and landing: where M1 meets the barrier (CAD), the
 # corner by the launch mark (the net beside it is nearly invisible).
 return_face: [-2.00, 0.42]
