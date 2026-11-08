@@ -41,6 +41,20 @@ class HoldWithoutVision(unittest.TestCase):
         self.assertTrue(g.steady(14.1))
         self.assertTrue(VisionGuard().steady(5.0))  # never lost: steady
 
+    def test_no_mapping_while_the_pose_is_dead_reckoned(self):
+        """localsim seed 705 (severity 0.7, 2 lapses a minute, 2026-11-08): after two lapses the drone
+        stood at the first corridor's top, 'free ahead 0', and aborted 'no progress toward m1_end':
+        depth frames mapped with the dead-reckoned pose left walls where there are none."""
+        g = VisionGuard(hold_s=1.0)
+        g.update(10.0, dead_reckoning=False, resets=0)
+        self.assertTrue(g.trust_pose(10.0))
+        g.update(10.1, dead_reckoning=True, resets=0)
+        self.assertFalse(g.trust_pose(10.1))
+        g.update(11.5, dead_reckoning=False, resets=1)
+        self.assertFalse(g.trust_pose(12.0))       # frames captured in the lapse still arriving
+        g.update(12.6, dead_reckoning=False, resets=1)
+        self.assertTrue(g.trust_pose(12.6))
+
 
 if __name__ == '__main__':
     unittest.main()
