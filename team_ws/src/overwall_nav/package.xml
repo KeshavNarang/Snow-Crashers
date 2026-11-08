@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>overwall_nav</name>
+  <version>0.1.0</version>
+  <description>
+    SnowCrashers test mission for a single wall in a test net: take off, creep forward until
+    stereo depth (computed on the Jetson from the OAK-D-S2 mono pair) says the wall is 0.5 m
+    ahead, climb over it, land behind it. Talks only to /skybeta/* and camera topics.
+  </description>
+  <maintainer email="lukema@stanford.edu">snowcrashers</maintainer>
+  <license>Apache-2.0</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>cv_bridge</exec_depend>
+  <exec_depend>message_filters</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>skybeta_flight_interface</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
