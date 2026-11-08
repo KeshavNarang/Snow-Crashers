@@ -1,5 +1,8 @@
 # Over-the-wall test settings. Edit, save, then battery out 10 s and back in (the stack
-# rebuilds and relaunches at power-up). Distances in metres, measured from the take-off spot.
+# rebuilds and relaunches at power-up). Distances in metres.
+#
+# Set-up: the drone starts on the floor FACING the wall, 27 in from it, and lands 6 ft 2 in
+# past it. The wall's position is measured by the camera at the stop; 27 in is the cross-check.
 stereo_depth:
   ros__parameters:
     camera_pitch_deg: 27.0     # camera holder angle, degrees DOWN
@@ -7,14 +10,16 @@ stereo_depth:
 
 overwall_mission:
   ros__parameters:
-    cruise_height_m: 0.7       # approach height: must be BELOW the wall top
-    stop_distance_m: 0.5       # stop this far (camera to wall)
-    max_forward_m: 4.57        # 15 ft. BACKSTOP: if depth never sees a wall, it stops here and lands
+    start_to_wall_m: 0.686     # 27 in: take-off spot to the wall (check, and fallback with no depth)
+    land_beyond_wall_m: 1.880  # 6 ft 2 in: land with the drone's centre this far past the wall
+    max_forward_m: 0.25        # BACKSTOP: the wall is right in front, so it may creep at most this
+                               # far towards it; if depth never sees it, it lands instead
+    cruise_height_m: 0.7       # first climb, straight up: must be BELOW the wall top
+    stop_distance_m: 0.5       # gap to hold (camera to wall) while climbing over
     wall_height_m: 0.0         # 0 = measure the wall top with the camera (the test). > 0 skips that
     over_margin_m: 0.4         # camera this far above the wall top when crossing
     max_height_m: 2.2          # never above this (above the take-off spot)
     net_top_m: 2.896           # 9.5 ft: top of the net above the floor
     net_clearance_m: 0.4       # the drone's top stays at least this far below the net
-    over_distance_m: 2.0       # from the stop point to where it lands (past the wall)
     approach_speed_mps: 0.2    # slow: depth runs ~3-5 Hz on the Jetson
     camera_height_m: 0.11      # camera above the floor when landed (used if the floor fit is unreliable)

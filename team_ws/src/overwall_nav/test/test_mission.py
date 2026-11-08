@@ -60,7 +60,9 @@ class World:
     def __init__(self, wall_at=2.5, wall_height=1.0, wall_thickness=0.1, wall_textured=True,
                  background_at=3.0, yaw_deg=20.0, start=(0.3, -0.2, 0.0), arm_at=4.0, switch_at=6.0,
                  takeover_at=None, depth=True, depth_dropout=None, local_offset_z=0.0, vio_tilt_deg=0.0,
-                 spurious=60, params=None, seed=1, floor_fit=None):
+                 spurious=60, params=None, seed=1, floor_fit=None, wall_bottom=0.0, crossbar=None):
+        self.crossbar = crossbar                # (bottom, top, protrusion) m: a bar standing out of the wall
+        self.wall_bottom = wall_bottom          # the wall face starts this high: a hole below it
         self.floor_fit = floor_fit
         params = dict({'min_cell': 10.0}, **(params or {}))
         self.mission = Mission(Params(**params))
@@ -85,6 +87,7 @@ class World:
         self.published, self.events, self.trace = [], [], []
         self.contacts = 0
         self.held = []
+        self.climb_alongs = []
         self.stop_gap = None
         self.max_gap_error = 0.0
         self.min_gap = None
@@ -111,11 +114,16 @@ class World:
                 near, thick, height = self.wall
                 t_face = np.where(df > 0, (near - cam_f) / df, np.inf)
                 hit_u = cam_u + t_face * du
-                t_face = np.where((hit_u >= 0) & (hit_u <= height), t_face, np.inf)
+                t_face = np.where((hit_u >= self.wall_bottom) & (hit_u <= height), t_face, np.inf)
                 t_top = np.where(du < 0, (height - cam_u) / du, np.inf)
                 hit_f = cam_f + t_top * df
                 t_top = np.where((hit_f >= near) & (hit_f <= near + thick), t_top, np.inf)
                 wall_t = np.minimum(t_face, t_top)
+                if self.crossbar:
+                    lo, hi, out = self.crossbar
+                    t_bar = np.where(df > 0, (near - out - cam_f) / df, np.inf)
+                    bar_u = cam_u + t_bar * du
+                    wall_t = np.minimum(wall_t, np.where((bar_u >= lo) & (bar_u <= hi), t_bar, np.inf))
                 wall_hit = wall_t < t
                 t = np.minimum(t, wall_t)
                 if not self.wall_textured:
@@ -209,8 +217,13 @@ class World:
         if self.wall:                                     # body: 0.5 m long, landing gear to props
             a, z = self.along(), self.p[2]
             near, thick, height = self.wall
-            if a + BODY_HALF_LENGTH > near and a - BODY_HALF_LENGTH < near + thick and z < height:
+            if a + BODY_HALF_LENGTH > near and a - BODY_HALF_LENGTH < near + thick and z < height \
+                    and z + 0.25 > self.wall_bottom:
                 self.contacts += 1
+            if self.crossbar:
+                lo, hi, out = self.crossbar
+                if a + BODY_HALF_LENGTH > near - out and a - BODY_HALF_LENGTH < near and z < hi and z + 0.25 > lo:
+                    self.contacts += 1
 
     def run(self, duration=100.0):
         for i in range(int(round(duration / DT))):
@@ -242,6 +255,8 @@ class World:
                 self.mission.log.clear()
                 if self.wall and phase == 'HOLD_WALL' and self.stop_gap is None:
                     self.stop_gap = self.wall[0] - (self.along() + CAM_FORWARD)
+                if self.wall and phase == 'CLIMB_OVER':
+                    self.climb_alongs.append(self.along())
                 if self.wall and phase == 'CLIMB_OVER' and self.p[2] < self.wall[2]:
                     gap = self.wall[0] - (self.along() + CAM_FORWARD)
                     self.max_gap_error = max(self.max_gap_error, abs(gap - 0.5))
@@ -385,6 +400,43 @@ class OverWallTest(unittest.TestCase):
         self.assertTrue(all(y == w.yaw for y in w.held), set(w.held))
         self.assertAlmostEqual(math.atan2(w.mission.forward[1], w.mission.forward[0]), w.yaw)
         self.assertIsNone(w.mission.hold_yaw)                 # none once landed (DONE / WAIT)
+
+    COURSE = {'start_to_wall_m': 0.686, 'max_forward_m': 0.25}     # config/overwall.yaml
+
+    def test_course_start_27_in_from_the_wall_lands_6_ft_2_in_past_it(self):
+        w = World(wall_at=0.686, wall_height=1.6, wall_bottom=0.3, params=self.COURSE).run(120.0)
+        self.assertLandedBeyond(w)
+        self.assertAlmostEqual(w.along(), 0.686 + 1.880, delta=0.2, msg=w.log())
+        self.assertIn('Wall top in view', w.log())
+        self.assertTrue(w.held and all(y == w.yaw for y in w.held), w.log())     # heading held all flight
+        self.assertLess(w.mission.result['wall_at_forward_m'], 0.25, w.log())    # no creep: it was there
+
+    def test_course_distance_measured_by_depth_not_assumed(self):
+        # The 27 in may be taken to the drone's front, not its centre: depth decides.
+        w = World(wall_at=0.9, wall_height=1.6, wall_bottom=0.3, params=self.COURSE).run(120.0)
+        self.assertLandedBeyond(w)
+        self.assertAlmostEqual(w.along(), 0.9 + 1.880, delta=0.2, msg=w.log())
+        self.assertAlmostEqual(w.mission.result['wall_from_start_m'], 0.9, delta=0.1, msg=w.log())   # depth's, not 0.686
+
+    def test_course_cross_bar_does_not_push_it_back(self):
+        # A 20 cm bar standing 10 cm out of the wall: the camera passes it on the climb. Start right
+        # at the 0.5 m camera gap, where an unfiltered hold backs off as the bar goes by.
+        bar = dict(wall_at=0.62, wall_height=1.6, wall_bottom=0.3, crossbar=(0.80, 1.00, 0.10))
+        raw = World(**bar, params=dict(self.COURSE, keep_window=1, keep_deadband_m=0.0, keep_max_mps=0.15)).run(120.0)
+        self.assertGreater(raw.climb_alongs[0] - min(raw.climb_alongs), 0.03, raw.log())   # the jump, unfiltered
+        w = World(**bar, params=self.COURSE).run(120.0)
+        self.assertLandedBeyond(w)
+        self.assertAlmostEqual(w.along(), 0.62 + 1.880, delta=0.25, msg=w.log())
+        self.assertLess(w.climb_alongs[0] - min(w.climb_alongs), 0.02, w.log())          # filtered: no jump
+
+    def test_course_blank_wall_is_never_touched(self):
+        # A blank wall: whichever safe way it goes (land in front, or stop on the floor seen through
+        # the hole and go over at the height limit), it must never touch the wall.
+        w = World(wall_at=0.686, wall_height=1.6, wall_bottom=0.3, wall_textured=False,
+                  params=self.COURSE).run(120.0)
+        self.assertEqual(w.contacts, 0, w.log())
+        self.assertFalse(w.armed, w.log())
+        self.assertTrue(w.along() < 0.686 - BODY_HALF_LENGTH or w.along() - BODY_HALF_LENGTH > 0.686 + 0.1, w.log())
 
     def test_param_guards(self):
         with self.assertRaises(ValueError):
