@@ -7,6 +7,7 @@ Observations (localsim, seed 405, severity 0.8, 2026-11-08):
   (viewer screenshot): the spot kept 0.42 m from the barrier's centreline, the stand's feet and
   pavers reach ~0.29 m out (localsim messy_course PAVER_OUT) and the rotor tips 0.29 m.
 """
+import math
 from pathlib import Path
 import unittest
 
@@ -46,6 +47,24 @@ class ReturnSpotClearsTheStands(unittest.TestCase):
         self.assertTrue(barrier, 'no return wall named barrier in goals.yaml')
         gap = barrier[0]['offset'] - HomewardConfig().body_radius - STAND_OUT
         self.assertGreaterEqual(gap, 0.10)
+
+
+class ReturnSpotMidwayNetAndM1(unittest.TestCase):
+    """v8 (seed 405): with M1's offset at 0.805 m the spot sat 0.41 m from the west net (rotor
+    tips 0.12 m off it). The team: split the difference between the net and M1."""
+
+    def test_spot_halfway_between_the_west_net_and_m1_for_its_whole_swing(self):
+        walls = {w.get('name'): w for w in yaml.safe_load(GOALS.read_text())['return_walls']}
+        offset, (a, _) = walls['M1']['offset'], walls['M1']['wall']
+        net_x, y = -3.048, 0.36 + walls['barrier']['offset']         # spot's row, off the barrier
+        for swing in (30., 45., 60.):                                  # M1 east of north (walls-rebuilt)
+            n = (-math.cos(math.radians(swing)), math.sin(math.radians(swing)))
+            dist_m1 = lambda x: (x - a[0]) * n[0] + (y - a[1]) * n[1]
+            lo, hi = net_x, a[0]
+            for _ in range(60):                                        # bisect: net gap == M1 gap
+                mid = (lo + hi) / 2
+                lo, hi = (mid, hi) if mid - net_x < dist_m1(mid) else (lo, mid)
+            self.assertAlmostEqual(offset, mid - net_x, delta=0.05, msg=f'M1 swung {swing} deg')
 
 
 if __name__ == '__main__':
