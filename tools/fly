@@ -5,6 +5,7 @@
 #                                    -> then power-cycle the drone (battery out 10 s, in, wait ~3 min)
 #   tools/fly check                  both health checks: the organizers' doctor, then our pre-flight
 #                                    (props off, on the launch mark), then goalnav's status
+#   tools/fly bench                  goalnav bench check, props off, read-only (~1 min): GO / NO-GO
 #   tools/fly logs                   copy the newest flight log folder to ./flight-logs/
 #   tools/fly done                   put Luke's overwall_nav back (asks sudo) and release the lock
 set -euo pipefail
@@ -48,6 +49,9 @@ case "${1:-}" in
     echo "== choosing the mission drone_ref/$launch (sudo password = the login password)"
     "$d" runt "~/team_ws/run_mission.sh drone_ref $launch"
     echo; echo "NOW: power-cycle the drone (battery out 10 s, in), wait ~3 min, then: tools/fly check" ;;
+  bench)
+    "$d" push tools/bench-goalnav.sh '/tmp/bench-goalnav.sh'
+    "$d" run 'bash /tmp/bench-goalnav.sh' ;;
   check)
     echo "== 1/3 the organizers' health check (host/doctor.sh)"
     "$d" run 'cd ~/skybeta && host/doctor.sh' || echo "doctor reported a FAIL: read it above before flying"
