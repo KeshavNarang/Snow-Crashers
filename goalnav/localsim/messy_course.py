@@ -73,7 +73,8 @@ LAYOUT = 'rebuilt'
 #   swung 30-60 degrees from north-south, its free (north) end east.
 M1_TILT_DEG = (30., 60.)
 # - Since 2026-11-08 (team, viewer screenshot): a foot or two between barrier panel 1's east end and
-#   the corner where M1 meets the barrier (about 1 ft), by the start and finish.
+#   the barrier: M1's base stands about 1 ft north (+y) of the corner, by the start and finish
+#   (team drawing, 2026-11-08).
 START_CORNER_GAP = 0.3048
 # - M3, the third, is now a short panel standing free ~0.3 m north of the
 #   barrier, swung the same way: its stand's two pavers, on its north-west side,
@@ -237,7 +238,7 @@ class Sampler:
         for which, m in mouths.items():
             if which == 'north' or self.rng.random() < 0.5:
                 v, t = mm.bevel(TUBE['cx'], m['y_local'], m['outward'], TUBE['cz'] * zscale, TUBE['hw'],
-                                TUBE['hh'] * zscale, drop=self.u(0.3, 0.6, False), reach=self.u(0.15, 0.4, False),
+                                TUBE['hh'] * zscale, drop=self.u(0.08, 0.18, False), reach=self.u(0.05, 0.18, False),   # team 2026-11-08: <= 7 in
                                 rng=self.rng)
                 xy = (v[:, :2] - centre) @ _rot(yaw).T + centre + shift
                 groups[f'Tunnel tarp {which}'] = (np.column_stack([xy, v[:, 2]]), t)
@@ -391,8 +392,7 @@ class Sampler:
         """The maze as rebuilt on 2026-11-07, from the walls as scanned (by name)."""
         walls = {k: w for k, w in scanned.items() if k != 'M2'}
         m1 = scanned['M1']
-        base = m1.pivot + np.array([START_CORNER_GAP, 0.])          # 1 ft east of panel 1's end, along the barrier
-        base[1] = self.barrier_y(joints, base[0]) + (m1.pivot[1] - self.barrier_y(joints, m1.pivot[0]))
+        base = m1.pivot + np.array([0., START_CORNER_GAP])          # 1 ft north of the barrier (team drawing)
         walls['M1'] = self._swung(m1, base, self._middle_out(*M1_TILT_DEG),
                                   float(np.linalg.norm(m1.free_end - m1.pivot)))
         centre = np.asarray(M3_CENTRE) + np.array([self.u(-0.1, 0.1), self.u(-0.1, 0.1)])
@@ -400,14 +400,13 @@ class Sampler:
         t = math.radians(from_north)
         half = np.array([math.sin(t), math.cos(t)]) * self.panel['short'] / 2
         walls['M3'] = self._feet_toward(self._swung(scanned['M3'], centre - half, from_north, self.panel['short']),
-                                        (-1., 1.))
-        centre = np.asarray(NW_PANEL_CENTRE) + np.array([self.u(-0.1, 0.1), self.u(-0.1, 0.1)])
-        yaw = math.radians(NW_PANEL_YAW_DEG + self.u(-4, 4))
-        half = np.array([math.cos(yaw), math.sin(yaw)]) * self.panel['long'] / 2
-        nw = self._dress(Wall('NW', [(centre - half, centre + half)], math.radians(self.u(-1, 1, False)),
-                              self.panel['height'], free_end=centre + half, yaw=yaw,
-                              cad_pivot=centre - half, pivot=centre - half))
-        walls['NW'] = self._feet_toward(nw, (0., -1.))
+                                        (1., -1.))      # team 2026-11-08: flipped, vinyl north-west
+        # Team 2026-11-08: a short panel fully in the north-west corner, against the north net (no jitter).
+        y = NET - WALL_T / 2 - 0.01
+        a_nw, b_nw = np.array([-NET + 0.02, y]), np.array([-NET + 0.02 + self.panel['short'], y])
+        nw = self._dress(Wall('NW', [(a_nw, b_nw)], 0., self.panel['height'], free_end=b_nw, yaw=0.,
+                              cad_pivot=a_nw, pivot=a_nw))
+        walls['NW'] = self._feet_toward(nw, (0., 1.))   # team 2026-11-08: flipped, vinyl south
         return walls
 
 
@@ -775,6 +774,11 @@ def _sample(seed, severity, layout=None, ladder=True, ladder_pose=None):
         # Team, 2026-11-08: panel 1 (behind the drone at takeoff) turned: vinyl toward the ladder,
         # its stand's struts and feet toward the launch corridor.
         Sampler._feet_toward(barrier[0], (0., 1.))
+        for wall in placed.values():                   # team 2026-11-08: M1 and C1 flipped
+            if wall.name == 'M1':
+                Sampler._feet_toward(wall, (1., -1.))  # vinyl north-west, toward the start corridor
+            elif wall.name == 'C1':
+                Sampler._feet_toward(wall, (-1., 0.))  # vinyl east
     walls = barrier + list(placed.values())
     pad, pad_mat = _place_pad(sampler, walls)
     for wall in walls:
@@ -804,7 +808,7 @@ def _sample(seed, severity, layout=None, ladder=True, ladder_pose=None):
     # The launch mark is taped in the middle of the first corridor (net to M1),
     # its CAD distance north of the barrier.
     m1 = next(w for w in walls if w.name == 'M1')
-    mark_x = (-nets['west'] + joints[1][0]) / 2           # taped between the net and panel 1's end (M1 stands 1 ft past it)
+    mark_x = (-nets['west'] + joints[1][0]) / 2           # taped between the net and the corner
     mark = [mark_x, Sampler.barrier_y(joints, mark_x) + (LAUNCH[1] - BARRIER_Y)]
     # Placed by hand on the taped mark: a few cm off it, the heading by eye.
     launch = {'xy': [mark[0] + sampler.u(-0.06, 0.06, False), mark[1] + sampler.u(-0.06, 0.06, False)],
