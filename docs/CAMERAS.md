@@ -32,6 +32,10 @@ The mono sensors can publish `bgr8`; that encoding does not make their pixels co
 | Organizer config in this checkout: `pipeline_gen.i_pipeline_type: stereo` | Mono pair + IMU; no on-camera depth/colour in the measured original pipeline |
 | Later team image, recorded in `agent/goalnav-oak-depth` | `depth` pipeline; on-camera depth plus mono pair, colour intentionally disabled |
 | Tested `rgbd` pipeline | Depth + colour + pair; worked but reduced integrated cuVSLAM rate |
+| **Team image now (`team_ws/camera/oakd_vslam.yaml`, main, PR #18)** | **`RGBSTEREO`: colour + mono pair, no on-camera depth.** On skybeta-03, `rgbd` and `depth` both left PX4 without VIO fusion (USB link saturated); RGBSTEREO fused, cuVSLAM 28 Hz ([log](../agents/logs/2026-11-07-overwall-pad.md)) |
+
+Colour camera tilt on skybeta-03 is fixed by the mount: TF base_link to
+`oak_rgb_camera_optical_frame` gives 27.0 deg down; the left mono camera, 27.6 deg.
 
 In the later team's config, an `rgb:` settings block and `i_publish_topic: true`
 do not activate colour by themselves when the selected pipeline is `depth`.

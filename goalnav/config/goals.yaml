@@ -59,8 +59,11 @@ return_offset: [0.0, 0.0]
 # around it (where M1 meets the barrier) stand feet and pavers reach ~0.6 m into the
 # corridor at floor level.
 return_walls:
-  - {wall: [[-1.98, 0.65], [-1.88, 1.65]], offset: 0.50}    # M1, its south half
-  - {wall: [[-2.90, 0.324], [-2.15, 0.402]], offset: 0.42}  # the barrier's first panel, west of M1
+# +1 ft each (team, 2026-11-08: the corner changed; sim props over the barrier stand's battens at
+# 0.42 m): rotor tips 0.29 m, stand feet/pavers ~0.29 m out from a panel's centreline at the floor.
+# M1 as rebuilt: from its barrier joint, swung ~45 deg east (30-60 deg, walls-rebuilt log).
+  - {name: M1, wall: [[-2.00, 0.41], [-1.55, 0.86]], offset: 0.70}         # M1 (rebuilt): halfway to the west net (0.67-0.74 m over its 30-60 deg swing)
+  - {name: barrier, wall: [[-2.90, 0.324], [-2.15, 0.402]], offset: 0.725}  # barrier panel 1, west of M1
 # The takeoff's climb is held this far off the launch spot ([right, ahead], m):
 # away from the barrier behind it and the nearly invisible net on its left.
 takeoff_offset: [0.05, 0.08]

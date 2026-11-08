@@ -18,6 +18,19 @@ Run the commands from the repo folder in **Git Bash** on your laptop.
   won't be asked.)
 - `git checkout main && git pull` so you fly the latest code.
 
+## Flying the full course (goalnav)
+
+Camera: the team image `RGBSTEREO` (colour + mono pair). On-camera depth (`rgbd`) left PX4 without
+VIO fusion (vision 665 ms old, 2026-11-07 23:49). Depth comes from goalnav's `stereo_node` on the
+Jetson (goalnav.launch.py, camera:=rgbstereo). Slow: `safe` profile, 0.4 m/s; 0.5 s on the pad, then
+the return. Over USB, put `DRONE_HOST=192.168.55.1` in front of each command (Wi-Fi needs nothing).
+
+1. `tools/fly deploy "<your name>"`: copies goalnav, makes sure the camera runs RGBSTEREO, picks
+   goalnav. Power-cycle, wait ~3 min, then 5 min more before measuring anything.
+2. `tools/fly bench`: props off, ~1 min, read-only: goalnav + stereo_node up, depth >= 3 Hz, PX4 fusion.
+3. `tools/fly check`: the camera pipeline must PASS (RGBSTEREO), PX4 link up, goalnav status printed.
+4. Pilot: Altitude, arm, Position. Kill switch in hand. Then `tools/fly logs`, `tools/fly done`.
+
 ## The four commands
 
 | Command | What it does |
