@@ -68,3 +68,15 @@ session had 20 sims running), no change to goals.yaml (the planner terminal's fi
 - The two scrapes left are on the west side (x -2.6..-2.77), not the M1 corner: not yet looked at.
 - 16 seeds: a direction, not a rate. Before adopting, re-run on 24+ seeds with the planner's final
   goals.yaml.
+
+## 21:03-21:13: return success on 40 seeds (barrier-only return_walls goals copy, guard off)
+Return success = of runs that reached the pad, home within tolerance with no wall contact on the way.
+| Seeds | Reached pad | Returned clean | Rate | 95 % lower bound |
+|---|---|---|---|---|
+| 1-16, as flies (M1 in return_walls) | 11 | 8 | 72.7 % | 43 % |
+| 1-16, barrier only | 11 | 9 | 81.8 % | 52 % |
+| 17-40, barrier only (new seeds) | 16 | 15 | 93.8 % | 72 % |
+| **1-40, barrier only** | **27** | **24** | **88.9 %** | **72 %** |
+Every return reached home (no return failed); the 3 misses are shallow scrapes in the descent
+(s8 -0.027, s15 -0.002, s22 -0.023 m). 95 % not reached; proving it needs >= 73 clean returns in a row.
+Whole mission on 17-40: 16/24 (pre-pad failures, the planner's), home 76.5 s on average.
