@@ -15,13 +15,13 @@ pad_detect:
 
 overwall_mission:
   ros__parameters:
-    manual: true               # 2026-11-08: take off by itself (0.7 m), then ONLY the PS5 flies it
+    manual: true               # 2026-11-08: take off by itself (1 m), then ONLY the PS5 flies it
                                # (tools/ps5). false = the autonomous wall crossing + pad search
     start_to_wall_m: 0.686     # 27 in: take-off spot to the wall (check, and fallback with no depth)
     land_beyond_wall_m: 1.880  # 6 ft 2 in: land with the drone's centre this far past the wall
     max_forward_m: 0.25        # BACKSTOP: the wall is right in front, so it may creep at most this
                                # far towards it; if depth never sees it, it lands instead
-    cruise_height_m: 0.7       # first climb, straight up: must be BELOW the wall top
+    cruise_height_m: 1.0       # take-off height (1 m, asked 2026-11-08); autonomous mode: must be BELOW the wall top
     stop_distance_m: 0.5       # gap to hold (camera to wall) while climbing over
     wall_height_m: 0.0         # 0 = measure the wall top with the camera (the test). > 0 skips that
     over_margin_m: 0.4         # camera this far above the wall top when crossing
