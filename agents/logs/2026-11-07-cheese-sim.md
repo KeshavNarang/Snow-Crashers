@@ -54,7 +54,8 @@ px4_link false. Sim now runs --colour --camera-hz 3.0 --camera-latency 0.4.
 ## Plan now (branch agent/cheese-validate)
 
 - goalnav.launch.py: RGBSTEREO colour + stereo_node depth on the Jetson; safe profile 0.4 m/s,
-  0.5 s on the pad (PX4 auto-disarms at 2 s landed); south_turn 1 ft further from the changed corner.
+  0.5 s on the pad from our own touchdown (before PX4 says landed; it auto-disarms 2 s after);
+  the return spot 1 ft further from the barrier and the rebuilt M1 (props were over the stand).
 - Sim at conservative numbers (depth and colour 2.8 Hz, 0.4 s old, colour camera 27.0 deg; rocks
   >= 1.5 ft off the mat; near ladder <= 1.5 ft off the barrier): cheese near + far ladder landed;
   full course far ladder, near ladder, and near ladder after the corner/pad changes: all DONE,
