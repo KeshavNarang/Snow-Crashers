@@ -8,3 +8,4 @@
 | Fuse sensor into goalnav | unassigned | todo | goalnav/ | After driver works |
 | Drone bring-up on skybeta-03 (read-only first) | claude | done (depth look) | agents/logs/2026-11-07-depth.md | Fix floor-fit orientation gate in overwall_nav |
 | Depth latency/rate (CPU SGBM, ~3 Hz, ~0.4 s old) | unassigned | todo | team_ws/src/overwall_nav, agents/logs/2026-11-07-depth-bottleneck.md | Organizers: on-camera depth? else tune SGBM |
+| CPU-bottleneck monitor + frame-rate survey | claude / agent/cpu-monitor | active (final live eval pending, drone offline) | tools/drone_tools/, agents/logs/2026-11-07-cpu-monitor.md | Re-run eval_live.sh on final code, release drone lock, push branch |
