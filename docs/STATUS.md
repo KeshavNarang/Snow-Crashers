@@ -21,6 +21,21 @@
   error: 0.055 m, zero contacts. It uses the older scan-era layout, CPU-stereo
   input model and Python vehicle model. It is not a hardware flight or PX4 SITL.
   The experiment is on the original default workspace's local main history; this docs-only change does not publish its implementation.
+- **Cheese run, rebuilt course (2026-11-07 late, branch `agent/cheese-validate`).**
+  Sim only (Python vehicle model; the pilot's Altitude, arm, Position start is modelled,
+  not PX4 SITL). Inputs: rebuilt walls; colour + on-camera depth at 8.6 Hz, 0.10-0.20 s
+  age; colour camera fixed at 27.0 deg (live TF); near ladder within 1.5 ft of the
+  barrier behind the launch; rocks at least 1.5 ft from the mat's edge (hard limit).
+  Lookouts moved north of the barrier (the old ones left the mat below the frame at 2.25 m).
+  Latest runs: near ladder sev 0.7 and far ladder x3 all landed on the pad, 0 contacts.
+  Details: [cheese log](../agents/logs/2026-11-07-cheese-sim.md).
+
+## Live drone, read 2026-11-07 21:55 (USB, 5 min after boot, read-only)
+
+skybeta-03 ran `overwall_nav` with CPU `stereo_depth` (~3.1 Hz), not goalnav. Colour was
+on (`/oak/rgb/image_raw`, 640x400 bgr8, ~8.6 Hz, fx 489.6); no on-camera depth topic;
+`px4_link: false`. The team camera config is now `rgbd` (colour + on-camera depth) on
+`agent/cheese-validate`, not yet built into the drone image.
 
 ## Branches and deployment are different things
 
