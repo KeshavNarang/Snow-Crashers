@@ -127,6 +127,20 @@ def test_rebuild_leaves_the_tape_and_checkpoint_lines(rebuilt):
                 assert np.allclose(old.lines['gate_a'][key], new.lines['gate_a'][key]), (seed, sev, key)
 
 
+def test_launch_spot_clear_of_stand_battens_at_floor_level():
+    """Nothing lies under the drone's body and arms on the launch mark, down to the floor: sim
+    seed 5 (severity 0.7, 2026-11-08) had the swung M1's stand frame 0.086 m from the launch,
+    under the 3 cm floor band the check looked at, so the drone touched it at take-off."""
+    bad = mc._sample(5 * 1000 + 8, 0.7)          # the layout seed 5 flew (attempt 8)
+    solid = {k: v for k, v in bad.groups.items() if not k.startswith(('Floor', 'Landing'))}
+    grid, res, extent = mc._band_raster(solid, -0.005, 0.03)
+    i = np.floor((np.asarray(bad.launch['xy']) + extent) / res).astype(int)
+    r = int(math.ceil(mc.LAUNCH_FLOOR_CLEAR / res))
+    window = grid[i[0] - r:i[0] + r + 1, i[1] - r:i[1] + r + 1]
+    assert window[np.hypot(*np.mgrid[-r:r + 1, -r:r + 1]) * res <= mc.LAUNCH_FLOOR_CLEAR].any()   # it is there
+    assert 'a tarp touches the drone on the launch mark' in mc.validate(bad)                          # and rejected
+
+
 def test_every_rebuilt_course_validates_without_m2(rebuilt):
     """M2 gone and the NW panel added (photos/New_Walls_*), and the course still
     flyable. generate() validates before it adds the next course's frame outside
