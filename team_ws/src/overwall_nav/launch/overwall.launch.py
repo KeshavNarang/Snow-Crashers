@@ -35,10 +35,11 @@ INTERFACE = [
 
 
 LOG_ROOT = '/root/team_ws/logs/overwall'
-# Small topics only (~tens of kB/s): what the mission saw, decided and commanded, and PX4's view.
+# Small topics only (~30 kB/s): what the mission saw, decided and commanded. PX4's view (armed, mode,
+# landed, local position) is in /skybeta/state: on skybeta-03 `ros2 bag record` never discovered the
+# /fmu/out/* topics (tried with best-effort QoS overrides too), so they are not listed here.
 BAG_TOPICS = ['/overwall/front', '/overwall/pad', '/skybeta/state', '/skybeta/setpoint/pose',
-              '/skybeta/setpoint/twist', '/visual_slam/tracking/odometry', '/fmu/out/vehicle_local_position',
-              '/fmu/out/vehicle_status_v1', '/fmu/out/battery_status', '/fmu/out/estimator_status_flags', '/rosout']
+              '/skybeta/setpoint/twist', '/visual_slam/tracking/odometry', '/rosout']
 
 
 def generate_launch_description():
