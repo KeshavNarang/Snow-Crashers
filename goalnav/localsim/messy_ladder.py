@@ -44,7 +44,7 @@ POSES = {
     # In the south-west net corner, rear feet ~0-5 cm off the nets ("Moved" in the log).
     'moved': Pose((-2.80, -2.50), 92.7, 'photos/New_Ladder_1/2.jpeg, 2026-11-07'),
 }
-DEFAULT_POSE = 'moved'           # the switch: 'original' puts it back
+DEFAULT_POSE = 'original'        # the switch: 'moved' (south-west corner) or 'original'
 NET = 3.048                      # the nets' nominal half-width (messy_course.NET)
 NET_TOLERANCE = 0.03             # a pose may push this far past the nominal net (it stands against it)
 CENTRE = POSES[DEFAULT_POSE].centre
