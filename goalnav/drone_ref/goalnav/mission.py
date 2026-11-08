@@ -46,6 +46,8 @@ class Telemetry:
     landed: bool
     preflight_ok: bool = True
     valid: bool = True
+    dead_reckoning: bool = False  # PX4 has no vision fused (vehicle_local_position.dead_reckoning)
+    xy_resets: int = 0            # PX4's xy_reset_counter: the estimate jumped when it changes
 
 
 @dataclass
@@ -75,6 +77,7 @@ class MissionConfig:
     return_guard_gate: bool = False
     stop_after: str = None         # staged tests: land where it is and disarm once this goal passes
     pad_disarm: bool = False        # end on the pad: stay down until PX4 disarms (no return)
+    vision_hold_max_s: float = 6.0  # PX4 dead reckoning this long while holding: give up, down where it is
     pad_rest_s: float = 1.0         # on the pad before climbing again (under PX4's COM_DISARM_LAND)
     pad_lookout_reach: float = 0.2  # at a pad lookout within this
     pad_sweep_deg: float = 35.      # there, sweep the heading this far either side of the expected spot
@@ -95,6 +98,31 @@ class MissionConfig:
     repel_reach: float = 0.40       # push off anything mapped closer than this
     repel_gain: float = 3.0
     repel_limit: float = 0.6
+
+
+class VisionGuard:
+    """Hold still while PX4 dead-reckons, and for ``hold_s`` once vision is back; flag the estimate's
+    jumps (xy resets) once each. A lapse ending just before the window let the sim fly into its
+    frame (seed 704); on skybeta-03 PX4 fused vision only 60 % of a sample with goalnav running."""
+
+    class Verdict:
+        def __init__(self, hold, jumped):
+            self.hold, self.jumped = hold, jumped
+
+    def __init__(self, hold_s=1.0):
+        self.hold_s, self.lost, self.back_at, self.resets = hold_s, False, None, None
+
+    def update(self, t, dead_reckoning, resets):
+        jumped = self.resets is not None and resets != self.resets
+        self.resets = resets
+        if dead_reckoning:
+            self.lost, self.back_at = True, None
+        elif self.lost or jumped:
+            self.lost, self.back_at = False, t if self.back_at is None or jumped else self.back_at
+        hold = dead_reckoning or (self.back_at is not None and t - self.back_at < self.hold_s)
+        if not hold:
+            self.back_at = None
+        return VisionGuard.Verdict(hold, jumped)
 
 
 class Touchdown:
@@ -139,6 +167,7 @@ class GoalMission:
         self.planner = Planner(plan_config)
         self.follower = Follower(follow_config)
         self.window = WindowManeuver()
+        self.vision = VisionGuard()
         self.status = Status()
         self.route = None
         self.map = None
@@ -611,7 +640,29 @@ class GoalMission:
             return self._abort(now, 'position estimate invalid')
         if self.started is not None and now - self.started > self.cfg.time_limit:
             return self._abort(now, 'time limit')
+        verdict = self.vision.update(now, telemetry.dead_reckoning, telemetry.xy_resets)
+        if verdict.jumped and state == 'NAVIGATE':
+            self._remeasure_after_jump(now)
+        if verdict.hold and state in ('NAVIGATE', 'RETURN', 'PAD_DESCEND', 'RETURN_DESCEND'):
+            if not getattr(self, 'vision_holding', False):
+                self.status.events.append((round(now, 3), 'vision lost: holding', state))
+                self.vision_hold_since = now
+            self.vision_holding = True
+            self.progress_at = now                 # holding for vision is not a stall
+            if now - self.vision_hold_since > self.cfg.vision_hold_max_s:
+                return self._abort(now, f'no vision for {self.cfg.vision_hold_max_s:.0f} s')
+            return self._hold(telemetry)
+        if getattr(self, 'vision_holding', False):
+            self.vision_holding = False
+            self.status.events.append((round(now, 3), 'vision back: going on', state))
         return getattr(self, '_' + state.lower())(telemetry, dt)
+
+    def _remeasure_after_jump(self, now):
+        """The estimate jumped: a window not yet passed is measured again from its settle point."""
+        goal = self.route.current if self.route is not None else None
+        if goal is not None and self.window.active_for(goal) and self.window.phase != 'done' and not self.window.committed:
+            self.window.start(now, goal)
+            self.status.events.append((round(now, 3), 'window', 'settle again (estimate jumped)'))
 
     def _abort(self, now, reason):
         """Give up: straight down where it is (there is no PX4 Land to ask for)."""
