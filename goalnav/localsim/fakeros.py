@@ -73,7 +73,8 @@ VehicleStatus = _msg('VehicleStatus', {
     'ARMING_STATE_DISARMED': 1, 'ARMING_STATE_ARMED': 2, 'NAVIGATION_STATE_ALTCTL': 1,
     'NAVIGATION_STATE_POSCTL': 2, 'NAVIGATION_STATE_AUTO_LOITER': 4,
     'NAVIGATION_STATE_OFFBOARD': 14, 'NAVIGATION_STATE_AUTO_LAND': 18},
-    timestamp=0, arming_state=1, nav_state=4, failsafe=False, pre_flight_checks_pass=True)
+    timestamp=0, arming_state=1, nav_state=4, failsafe=False, pre_flight_checks_pass=True, system_id=1,
+    component_id=1)
 VehicleLocalPosition = _msg(
     'VehicleLocalPosition', timestamp=0, timestamp_sample=0, x=0., y=0., z=0., vx=0., vy=0., vz=0.,
     heading=0., xy_valid=True, z_valid=True, v_xy_valid=True, v_z_valid=True, eph=0., epv=0.,
