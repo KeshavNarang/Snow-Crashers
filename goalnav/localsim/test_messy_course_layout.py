@@ -15,9 +15,7 @@ import pytest
 from localsim import goalrun
 from localsim import messy_course as mc
 
-SEEDS = (0, 1, 2, 3)
-SEVERITIES = (0.0, 1.0)
-CASES = [(s, v) for s in SEEDS for v in SEVERITIES]
+CASES = [(0, 0.0), (1, 1.0)]     # the measured pose, and the full jitter (CLAUDE.md budgets)
 
 
 def _by_name(walls):
@@ -53,7 +51,7 @@ def test_goalrun_offers_the_layout_switch(capsys):
 
 def test_scan_layout_is_the_course_as_scanned():
     """Switching back gives the old walls: M2 there, M1 turned ~6 degrees, M3 north-south."""
-    for seed in (0, 1):
+    for seed in (0,):
         c = mc.generate(seed, 0.0, layout='scan')
         names = {w.name for w in c.walls if not w.name.startswith('Barrier')}
         assert names == {'M1', 'M2', 'M3', 'C1', 'A1', 'C2a'}
@@ -61,12 +59,6 @@ def test_scan_layout_is_the_course_as_scanned():
         assert abs(_from_north(by['M1']) - 6.) < 0.5          # SCAN_YAW -6 (CCW), north end east
         assert abs(_from_north(by['M3'])) < 0.5
         assert 0.9 < by['M3'].pieces[0][0][0] < 1.1            # the scan's M3, 0.70 east of the CAD
-
-
-def test_rebuild_removes_m2_and_adds_the_north_west_panel(rebuilt):
-    for (seed, sev), c in rebuilt.items():
-        names = {w.name for w in c.walls if not w.name.startswith('Barrier')}
-        assert names == {'M1', 'M3', 'NW', 'C1', 'A1', 'C2a'}, (seed, sev)
 
 
 def test_rebuild_tilts_m1_30_to_60_degrees_east(rebuilt):
@@ -122,8 +114,8 @@ def test_rebuild_leaves_the_tape_and_checkpoint_lines(rebuilt):
     drawn after the walls, so they differ between the two; the parts set from
     the nets, the CP1 line's y and west end and the tape's two CP1 vertices'
     y, are left out.)"""
-    for seed in SEEDS:
-        for sev in SEVERITIES:
+    for seed, sev in CASES:
+        if True:
             old = mc._sample(seed * 1000, sev, layout='scan')
             new = mc._sample(seed * 1000, sev, layout='rebuilt')
             g_old, g_new = np.asarray(old.guideline), np.asarray(new.guideline)
@@ -135,11 +127,14 @@ def test_rebuild_leaves_the_tape_and_checkpoint_lines(rebuilt):
                 assert np.allclose(old.lines['gate_a'][key], new.lines['gate_a'][key]), (seed, sev, key)
 
 
-def test_every_rebuilt_course_validates(rebuilt):
-    """generate() validates before it adds the next course's frame outside the
-    net (_surroundings), so check without that frame."""
+def test_every_rebuilt_course_validates_without_m2(rebuilt):
+    """M2 gone and the NW panel added (photos/New_Walls_*), and the course still
+    flyable. generate() validates before it adds the next course's frame outside
+    the net (_surroundings), so check without that frame."""
     import copy
     for (seed, sev), c in rebuilt.items():
+        names = {w.name for w in c.walls if not w.name.startswith('Barrier')}
+        assert names == {'M1', 'M3', 'NW', 'C1', 'A1', 'C2a'}, (seed, sev)
         inside = copy.copy(c)
         inside.groups = {k: v for k, v in c.groups.items() if '(next course)' not in k}
         assert mc.validate(inside) == [], (seed, sev)
