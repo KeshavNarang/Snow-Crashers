@@ -4,7 +4,10 @@ The mat's colour model is a chromaticity histogram (colour independent of bright
 picture cut from a photo of the real mat (``pad_reference.npy``, a copy of goalnav/assets/), with
 the orange floor tarp's colour cut out. Each frame:
 
-1. pixels whose chromaticity is common on the mat (``PadFinder.mask``);
+1. pixels whose chromaticity is common on the mat, OR in the mat's blue-cyan hue band
+   (``PadFinder.mask``): under the hall's lights the reference histogram alone marked 9 % of the
+   real mat (photos/New_Ladder_1.jpeg) and the flights saw no pad at all; the band marks ~85 %;
+   then thin parts (a 3x3 opening: ladder rails and rungs a pixel or two wide) are removed;
 2. 4-connected blobs of them (the white arcs and grey H are holes);
 3. each blob pixel's ray cast onto the floor, in the camera's level frame (F forward, L left),
    for a camera ONE metre above the floor, weighted by the floor area it covers;
@@ -40,6 +43,9 @@ class PadConfig:
     min_squareness: float = 0.6    # short side / long side on the floor (mat ~1 at any rotation)
     threshold: float = 0.35        # of the colour model's peak
     max_width: int = 160           # work on an image this wide at most (speed)
+    hue_deg: tuple = (160.0, 260.0)  # blue-cyan band (the mat ~196 deg; the orange tarp ~15 deg)
+    min_saturation: float = 0.24
+    min_value: float = 0.24
 
 
 def chromaticity(rgb):
@@ -69,7 +75,11 @@ class PadFinder:
     def mask(self, image):
         rg, brightness = chromaticity(image)
         b = _bins(rg)
-        return (self.model[b[..., 0], b[..., 1]] > self.cfg.threshold) & (brightness > 60)
+        model = (self.model[b[..., 0], b[..., 1]] > self.cfg.threshold) & (brightness > 60)
+        h, sat, val = hsv(image)
+        lo, hi = self.cfg.hue_deg
+        band = (h >= lo) & (h <= hi) & (sat >= self.cfg.min_saturation) & (val >= self.cfg.min_value)
+        return model | band
 
     def candidates(self, image, K, pitch_deg, roll_deg=0.0, undistort=None):
         """Blobs that lie on the floor: [{'centre': [f, l], 'sides': [short, long], 'touches', 'pixels'}],
@@ -79,7 +89,7 @@ class PadFinder:
             return []
         step = max(1, int(math.ceil(image.shape[1] / self.cfg.max_width)))
         small = np.asarray(image)[::step, ::step]
-        mask = self.mask(small)
+        mask = opening(self.mask(small))
         K = np.asarray(K, float)
         fx, fy, cx, cy = K[0, 0], K[1, 1], K[0, 2], K[1, 2]
         to_level = mount_matrix(pitch_deg, roll_deg)
@@ -126,6 +136,27 @@ def pick_pad(candidates, cam_height, config=None):
     if best is None:
         return None
     return (float(best['centre'][0]) * cam_height, float(best['centre'][1]) * cam_height)
+
+
+def hsv(image):
+    """Hue (deg), saturation and value (0..1) of an RGB image."""
+    rgb = np.asarray(image, float) / 255.0
+    mx, mn = rgb.max(axis=-1), rgb.min(axis=-1)
+    d = mx - mn
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    with np.errstate(divide='ignore', invalid='ignore'):
+        h = np.where(mx == r, (g - b) / d % 6, np.where(mx == g, (b - r) / d + 2, (r - g) / d + 4)) * 60.0
+        sat = np.where(mx > 0, d / mx, 0.0)
+    return np.nan_to_num(h), sat, mx
+
+
+def opening(mask):
+    """3x3 erosion then dilation: drops parts 1-2 px wide (ladder rails, rungs, noise), keeps the mat."""
+    def shifts(m):
+        p = np.pad(m, 1)
+        return [p[1 + a:p.shape[0] - 1 + a, 1 + b:p.shape[1] - 1 + b] for a in (-1, 0, 1) for b in (-1, 0, 1)]
+    eroded = np.logical_and.reduce(shifts(mask))
+    return np.logical_or.reduce(shifts(eroded))
 
 
 def solidity(pixels):
