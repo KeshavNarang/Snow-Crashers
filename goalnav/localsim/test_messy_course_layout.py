@@ -84,7 +84,7 @@ def test_rebuild_moves_m3_to_the_photos_pose(rebuilt):
         assert min(a[1], b[1]) > mc.SCAN_BARRIER_Y + 0.15, (seed, sev)       # free of the barrier
         d = (b - a) / np.linalg.norm(b - a)
         bare = -m3.tarp_side * np.array([-d[1], d[0]])          # messy_stand: struts and pavers on the bare side
-        assert bare @ np.array([-1., 1.]) > 0, (seed, sev)      # north-west
+        assert bare @ np.array([-1., 1.]) < 0, (seed, sev)      # team 2026-11-08: turned, its feet south-east
     m3 = _by_name(rebuilt[(0, 0.0)].walls)['M3']                 # Its pavers where both photos put them.
     a, b = (np.asarray(p) for p in m3.pieces[0])
     d = (b - a) / np.linalg.norm(b - a)
@@ -94,18 +94,17 @@ def test_rebuild_moves_m3_to_the_photos_pose(rebuilt):
 
 
 def test_rebuild_north_west_panel_caps_the_first_corridor(rebuilt):
+    """Team, 2026-11-08: NW is a short panel fully in the north-west corner, against the north net, its
+    vinyl facing south (feet toward the net)."""
     for (seed, sev), c in rebuilt.items():
         nw = _by_name(c.walls)['NW']
         a, b = (np.asarray(p) for p in nw.pieces[0])
-        mid = (a + b) / 2
-        reach = 0.10 * mc.JITTER * sev + 1e-6
-        assert np.all(np.abs(mid - np.asarray(mc.NW_PANEL_CENTRE)) <= reach + 1e-9), (seed, sev, mid)
         d = b - a
-        assert abs(math.degrees(math.atan2(d[1], d[0])) - mc.NW_PANEL_YAW_DEG) <= 4. * mc.JITTER * sev + 1e-6
-        assert abs(_length(nw) - mc.LONG_PANEL) < 0.06
+        assert abs(_length(nw) - mc.SHORT_PANEL) < 0.06
+        assert min(a[0], b[0]) < -mc.NET + 0.1                   # in the west corner
+        assert min(a[1], b[1]) > mc.NET - 0.1                    # on the north net
         bare = -nw.tarp_side * np.array([-d[1], d[0]]) / np.linalg.norm(d)
-        assert bare[1] < 0, (seed, sev)                          # its stand's feet toward the corridor (south)
-        assert max(a[1], b[1]) < c.nets['north'] - 0.2
+        assert bare[1] > 0, (seed, sev)                          # feet toward the net, vinyl south
 
 
 def test_rebuild_leaves_the_tape_and_checkpoint_lines(rebuilt):
@@ -132,7 +131,9 @@ def test_launch_spot_clear_of_stand_battens_at_floor_level():
     seed 5 (severity 0.7, 2026-11-08) had the swung M1's stand frame 0.086 m from the launch,
     under the 3 cm floor band the check looked at, so the drone touched it at take-off."""
     from unittest import mock
-    with mock.patch.object(mc, 'START_CORNER_GAP', 0.):     # the geometry it flew in: M1 at panel 1's end
+    # The geometry it flew in: M1 at panel 1's end, no walls turned (team corrections came later).
+    with mock.patch.object(mc, 'START_CORNER_GAP', 0.), \
+            mock.patch.object(mc.Sampler, '_feet_toward', staticmethod(lambda wall, side: wall)):
         bad = mc._sample(5 * 1000 + 8, 0.7)      # the layout seed 5 flew (attempt 8)
     solid = {k: v for k, v in bad.groups.items() if not k.startswith(('Floor', 'Landing'))}
     grid, res, extent = mc._band_raster(solid, -0.005, 0.03)
@@ -167,11 +168,13 @@ def test_barrier_panel_1_vinyl_faces_the_ladder(rebuilt):
 
 
 def test_gap_between_barrier_panel_1_and_the_start_corner(rebuilt):
-    """Team, 2026-11-08 (viewer screenshot): about 1 ft of space between barrier panel 1 (behind the
-    drone at takeoff) and the corner where M1 meets the barrier, by the start and finish."""
+    """Team drawing, 2026-11-08 (+y up): M1's base stands about 1 ft north of the barrier at the corner
+    by the start and finish; panels 1 and 2 meet as before."""
     for (seed, sev), course in rebuilt.items():
         walls = _by_name(course.walls)
-        east_end = np.asarray(walls['Barrier 1'].pieces[0][1])      # panel 1's east end (the joint)
-        corner = np.asarray(walls['M1'].pieces[0][0])
-        gap = float(np.linalg.norm(east_end - corner))
+        a, b = (np.asarray(q) for q in walls['Barrier 1'].pieces[0])
+        d = (b - a) / np.linalg.norm(b - a)
+        base = np.asarray(walls['M1'].pieces[0][0])
+        gap = float((base - b) @ np.array([-d[1], d[0]])) - mc.WALL_T / 2      # base to panel 1's face, north
         assert 0.25 <= gap <= 0.40, (seed, sev, gap)
+        assert float(np.linalg.norm(np.asarray(walls['Barrier 2'].pieces[0][0]) - b)) < 0.05   # panels meet
