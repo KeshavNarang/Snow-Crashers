@@ -167,11 +167,13 @@ def test_barrier_panel_1_vinyl_faces_the_ladder(rebuilt):
 
 
 def test_gap_between_barrier_panel_1_and_the_start_corner(rebuilt):
-    """Team, 2026-11-08 (viewer screenshot): about 1 ft of space between barrier panel 1 (behind the
-    drone at takeoff) and the corner where M1 meets the barrier, by the start and finish."""
+    """Team drawing, 2026-11-08 (+y up): M1's base stands about 1 ft north of the barrier at the corner
+    by the start and finish; panels 1 and 2 meet as before."""
     for (seed, sev), course in rebuilt.items():
         walls = _by_name(course.walls)
-        east_end = np.asarray(walls['Barrier 1'].pieces[0][1])      # panel 1's east end (the joint)
-        corner = np.asarray(walls['M1'].pieces[0][0])
-        gap = float(np.linalg.norm(east_end - corner))
+        a, b = (np.asarray(q) for q in walls['Barrier 1'].pieces[0])
+        d = (b - a) / np.linalg.norm(b - a)
+        base = np.asarray(walls['M1'].pieces[0][0])
+        gap = float((base - b) @ np.array([-d[1], d[0]])) - mc.WALL_T / 2      # base to panel 1's face, north
         assert 0.25 <= gap <= 0.40, (seed, sev, gap)
+        assert float(np.linalg.norm(np.asarray(walls['Barrier 2'].pieces[0][0]) - b)) < 0.05   # panels meet
