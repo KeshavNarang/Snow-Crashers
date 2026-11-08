@@ -61,8 +61,9 @@ case "${1:-}" in
     echo; echo "Expected with goalnav: pre-flight 'mission' (names drone_ref), 'pad_detect' and 'wall depth rate'"
     echo "(overwall_nav's nodes) FAIL. Everything else, and the doctor, should PASS. Camera must be RGBSTEREO." ;;
   logs)
-    last=$("$d" run 'ls -t ~/team_ws/logs | head -1')
-    mkdir -p flight-logs && "$d" pull "~/team_ws/logs/$last" "flight-logs/" && echo "saved flight-logs/$last" ;;
+    last=$("$d" run 'ls -t ~/team_ws/logs | grep -vx overwall | head -1')   # overwall_nav logs to its own subfolder
+    mkdir -p flight-logs && "$d" pull "~/team_ws/logs/$last" "flight-logs/" \
+      && echo "saved flight-logs/$last; summary: python3 tools/postflight.py flight-logs/$last" ;;
   done)
     "$d" runt '~/team_ws/run_mission.sh overwall_nav overwall.launch.py' || true
     "$root/tools/drone-lock" release ;;
