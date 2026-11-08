@@ -10,6 +10,7 @@ Never /fmu/in/*, never arms, never changes mode.
 """
 import json
 import math
+import os
 
 import rclpy
 from rclpy.executors import ExternalShutdownException
@@ -51,6 +52,9 @@ class OverWallNode(Node):
                              history=HistoryPolicy.KEEP_LAST, depth=5)
         self.px4_heading = None
         self.create_subscription(VehicleLocalPosition, topic, self.local_position_cb, px4_qos)
+        # Our own line-by-line log, fsynced: ROS's log files and the bag were lost at a power-off.
+        run_dir = os.environ.get('ROS_LOG_DIR')
+        self.logfile = open(os.path.join(run_dir, 'mission.log'), 'a') if run_dir else None
         self.create_timer(0.1, self.tick)
         p = self.mission.p
         wall = f'wall {p.wall_height_m:.2f} m tall' if p.wall_height_m > 0 else 'wall height from depth'
@@ -104,6 +108,10 @@ class OverWallNode(Node):
         command = self.mission.step(now, self.state, self.odom, self.front, self.pad)
         for line in self.mission.log:
             self.get_logger().info(f'[{self.mission.phase}] {line}')
+            if self.logfile:
+                self.logfile.write(f'{now:.2f} [{self.mission.phase}] {line}\n')
+                self.logfile.flush()
+                os.fsync(self.logfile.fileno())
         self.mission.log.clear()
         if command is None:
             return

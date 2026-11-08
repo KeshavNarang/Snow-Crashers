@@ -101,8 +101,12 @@ class PadDetectNode(Node):
                 os.makedirs(self.save_dir, exist_ok=True)
                 small = cv2.resize(image, (320, max(1, image.shape[0] * 320 // image.shape[1])))
                 name = '%.2f_%d.jpg' % (Time.from_msg(msg.header.stamp).nanoseconds * 1e-9, len(candidates))
-                cv2.imwrite(os.path.join(self.save_dir, name), cv2.cvtColor(small, cv2.COLOR_RGB2BGR),
-                            [cv2.IMWRITE_JPEG_QUALITY, 85])
+                ok, jpg = cv2.imencode('.jpg', cv2.cvtColor(small, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 85])
+                if ok:                                # fsync: a power-off left 0-byte files before
+                    with open(os.path.join(self.save_dir, name), 'wb') as f:
+                        f.write(jpg.tobytes())
+                        f.flush()
+                        os.fsync(f.fileno())
             except Exception as exc:  # noqa: BLE001
                 self.get_logger().warn(f'snapshot not saved: {exc}', throttle_duration_sec=30.0)
         self.frames += 1
