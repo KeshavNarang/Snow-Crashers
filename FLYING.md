@@ -39,6 +39,7 @@ the return. Over USB, put `DRONE_HOST=192.168.55.1` in front of each command (Wi
 | *power-cycle the drone* | Battery out 10 s, back in, wait about **3 minutes**. |
 | `tools/fly check` | **Both health checks in one go:** the organizers' `host/doctor.sh`, then our pre-flight, then goalnav's status. Drone on the launch mark, props off. |
 | `tools/fly logs` | After a flight: copies the newest flight log folder to `./flight-logs/`. |
+| `python3 tools/postflight.py flight-logs/<run>` | One-minute summary: goalnav states and events, PX4 link/mode/VIO fusion/height, depth and colour rates, node errors; saves `summary.json` (needs `pip install rosbags`). |
 | `tools/fly done` | Puts Luke's overwall_nav mission back (asks sudo) and releases the lock. Takes effect at the next power-up. |
 
 ### Reading `tools/fly check`
