@@ -109,14 +109,25 @@ class VisionGuard:
         def __init__(self, hold, jumped):
             self.hold, self.jumped = hold, jumped
 
-    def __init__(self, hold_s=1.0):
+    def __init__(self, hold_s=1.0, steady_s=3.0):
         self.hold_s, self.lost, self.back_at, self.resets = hold_s, False, None, None
+        self.steady_s, self.last_lost = steady_s, None
+
+    def trust_pose(self, t):
+        """The pose is vision-fused: not in a lapse nor within ``hold_s`` after it (depth frames
+        captured in the lapse may still arrive). Frames mapped with a dead-reckoned pose leave walls
+        where there are none (seed 705)."""
+        return not self.lost and (self.back_at is None or t - self.back_at >= self.hold_s)
+
+    def steady(self, t):
+        """Vision fused for ``steady_s`` without a lapse (or never lost): fit for a tight passage."""
+        return self.last_lost is None or t - self.last_lost >= self.steady_s
 
     def update(self, t, dead_reckoning, resets):
         jumped = self.resets is not None and resets != self.resets
         self.resets = resets
         if dead_reckoning:
-            self.lost, self.back_at = True, None
+            self.lost, self.back_at, self.last_lost = True, None, t
         elif self.lost or jumped:
             self.lost, self.back_at = False, t if self.back_at is None or jumped else self.back_at
         hold = dead_reckoning or (self.back_at is not None and t - self.back_at < self.hold_s)
@@ -286,6 +297,9 @@ class GoalMission:
 
     # -- perception ------------------------------------------------------------------------
     def add_depth(self, origin, points):
+        now = self.telemetry.t if self.telemetry is not None else None
+        if now is not None and not self.vision.trust_pose(now):
+            return                                 # dead-reckoned pose: these points would be misplaced
         if self.map is not None and self.state not in ('IDLE', 'DONE'):
             self.map.insert(origin, points)
             if self.state in ('RETURN', 'RETURN_DESCEND'):
@@ -652,10 +666,26 @@ class GoalMission:
             if now - self.vision_hold_since > self.cfg.vision_hold_max_s:
                 return self._abort(now, f'no vision for {self.cfg.vision_hold_max_s:.0f} s')
             return self._hold(telemetry)
+        if state == 'NAVIGATE' and not self.vision.steady(now) and self._tight_ahead():
+            self.progress_at = now                 # waiting for steady vision is not a stall
+            if not getattr(self, 'vision_waiting', False):
+                self.status.events.append((round(now, 3), 'waiting for steady vision', 'tight passage'))
+            self.vision_waiting = True
+            return self._hold(telemetry)
+        self.vision_waiting = False
         if getattr(self, 'vision_holding', False):
             self.vision_holding = False
             self.status.events.append((round(now, 3), 'vision back: going on', state))
         return getattr(self, '_' + state.lower())(telemetry, dt)
+
+    def _tight_ahead(self):
+        """The next goal is the tunnel or the window (not once the window pass is committed)."""
+        goal = self.route.current if self.route is not None else None
+        if goal is None:
+            return False
+        if self.window.active_for(goal) and self.window.committed:
+            return False
+        return goal.kind in ('tube', 'opening') or goal.anchor is not None
 
     def _remeasure_after_jump(self, now):
         """The estimate jumped: a window not yet passed is measured again from its settle point."""
