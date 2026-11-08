@@ -403,7 +403,7 @@ def fly(args, bus, world, camera, vehicle, mission, referee, recorder, meta, rng
             'touches': len(summary['touch_events']), 'touch_events': summary['touch_events'][:20],
             'strict': summary['strict'], 'crashed': summary['crashed'],
             'ground_contact': summary['ground_contact'], 'return': summary['return'],
-            'net_touches': info.get('net_touches', [])[:20], 'events': mission.status.events,
+            'net_touches': info.get('net_touches', [])[:20], 'vio_lapses': vehicle.lapses[:60], 'events': mission.status.events,
             'pad_landing': info.get('pad_landing'),
             'vehicle_events': vehicle.events[-30:], 'rest_xy': summary['rest_xy'],
             'floor_tracker': {'accepted': mission.floor.accepted if mission.floor else 0,
