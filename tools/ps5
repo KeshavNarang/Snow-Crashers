@@ -5,8 +5,8 @@
 #   tools/ps5            pair the controller with this laptop first (Bluetooth or USB-C)
 #   tools/ps5 --dry      no drone: print what would be sent (check the buttons)
 #
-# Hold L1 to nudge: left stick = forward/back/left/right, right stick up/down = height (0.25 m/s,
-# at most 1.5 m sideways, 0.5 m up/down). L1 + Cross = land here. Circle = hold (hover).
+# MANUAL mode (manual: true in overwall.yaml): after the automatic take-off to 0.7 m the controller
+# flies it: left stick = forward/back/left/right (0.4 m/s), R2 = up, L2 = down (0.3 m/s). L1 + Cross = land here. Circle = hold (hover).
 # Triangle = resume. Square = clear the nudge. The RC transmitter's kill switch still rules.
 # First run creates .venv-ps5/ in the repo (gitignored) with pygame; nothing else to install.
 set -euo pipefail
