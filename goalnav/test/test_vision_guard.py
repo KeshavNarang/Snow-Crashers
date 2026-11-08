@@ -30,6 +30,17 @@ class HoldWithoutVision(unittest.TestCase):
         g = VisionGuard(hold_s=1.0)
         self.assertFalse(any(g.update(10 + k * 0.02, dead_reckoning=False, resets=0).hold for k in range(500)))
 
+    def test_tight_passages_wait_for_steady_vision(self):
+        """Seed 704 with the hold (2026-11-08): touches in the tunnel and the window right after
+        lapses: PX4 holds a drifting estimate, so the body wanders ~0.2 m where margins are 0.1-0.2 m."""
+        g = VisionGuard(hold_s=1.0, steady_s=3.0)
+        g.update(10.0, dead_reckoning=True, resets=0)
+        g.update(11.0, dead_reckoning=False, resets=1)
+        self.assertFalse(g.update(12.5, dead_reckoning=False, resets=1).hold)
+        self.assertFalse(g.steady(12.5))           # open flight may go on, a tight passage waits
+        self.assertTrue(g.steady(14.1))
+        self.assertTrue(VisionGuard().steady(5.0))  # never lost: steady
+
 
 if __name__ == '__main__':
     unittest.main()
