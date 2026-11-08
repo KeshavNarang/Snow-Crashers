@@ -38,7 +38,7 @@ the return. Over USB, put `DRONE_HOST=192.168.55.1` in front of each command (Wi
 | `tools/fly deploy "<your name>"` | Takes the drone lock, copies goalnav onto the drone (the old copy is kept in `~/drone_ref.prev-<time>`), checks it builds, makes sure the camera runs **RGBSTEREO** (if it doesn't, builds the team camera image, which takes several minutes), and picks goalnav as the mission (asks for the sudo password, which is the login password). |
 | *power-cycle the drone* | Battery out 10 s, back in, wait about **3 minutes**. |
 | `tools/fly check` | **Both health checks in one go:** the organizers' `host/doctor.sh`, then our pre-flight, then goalnav's status. Drone on the launch mark, props off. |
-| `tools/fly logs` | After a flight: copies the newest flight log folder to `./flight-logs/`. |
+| `tools/fly logs` | After a flight: copies the newest flight's log folder from the drone to `./flight-logs/` on your laptop, checks every file arrived (same file count and bytes as on the drone; a cut-short copy is redone, a complete one isn't copied twice), then prints the flight summary (`tools/postflight.py`: mission states, PX4, sensor rates, errors; needs `pip install rosbags` once). `tools/fly logs list` shows recent flights; `tools/fly logs <folder>` pulls an older one, e.g. a failed run. Wait until the flight has ended: the recording (with video) can be several GB. |
 | `python3 tools/postflight.py flight-logs/<run>` | One-minute summary: goalnav states and events, PX4 link/mode/VIO fusion/height, depth and colour rates, node errors; saves `summary.json` (needs `pip install rosbags`). |
 | `tools/fly done` | Puts Luke's overwall_nav mission back (asks sudo) and releases the lock. Takes effect at the next power-up. |
 
