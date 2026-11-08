@@ -91,5 +91,31 @@ class DescentGateTest(unittest.TestCase):
         self.assertGreater(g.rate(h=0.05, off=0.2, speed=0.2), 0.)          # never hold once landing
 
 
+class PartsTest(unittest.TestCase):
+    """Each part of the guard can be switched on alone, to find which one hurt (3 -> 6 return scrapes)."""
+
+    def test_master_switch_turns_on_every_part(self):
+        from types import SimpleNamespace
+        cfg = SimpleNamespace(return_guard=True)
+        self.assertTrue(all(homeward.enabled(cfg, p) for p in homeward.PARTS))
+
+    def test_one_part_alone(self):
+        from types import SimpleNamespace
+        cfg = SimpleNamespace(return_guard=False, return_guard_gate=True)
+        self.assertEqual([p for p in homeward.PARTS if homeward.enabled(cfg, p)], ['gate'])
+
+    def test_all_off_by_default_in_the_mission(self):
+        from drone_ref.goalnav.mission import MissionConfig
+        cfg = MissionConfig()
+        for part in homeward.PARTS:
+            self.assertTrue(hasattr(cfg, f'return_guard_{part}'), part)    # tunable with --tune
+            self.assertFalse(homeward.enabled(cfg, part), part)
+
+    def test_unknown_part_is_an_error(self):
+        from types import SimpleNamespace
+        with self.assertRaises(KeyError):
+            homeward.enabled(SimpleNamespace(return_guard=True), 'nonsense')
+
+
 if __name__ == '__main__':
     unittest.main()

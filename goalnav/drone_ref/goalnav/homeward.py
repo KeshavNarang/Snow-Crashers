@@ -27,6 +27,17 @@ Heights are of the body origin over the floor (the feet are
 from dataclasses import dataclass
 
 TUNNEL_RADIUS = 0.7366          # the tunnel's half width (localsim.messy_course.TUBE['hw'])
+# The guard's parts, each switchable alone (mission: return_guard_<part>; return_guard turns on all):
+# margins (the profile's reach, height margin and ceiling), spot (the touchdown spot's distance from
+# the walls), freeze (the spot stops moving beside the walls), gate (the descent holds to re-centre).
+PARTS = ('margins', 'spot', 'freeze', 'gate')
+
+
+def enabled(cfg, part):
+    """True when ``cfg`` (a MissionConfig) turns ``part`` of the guard on."""
+    if part not in PARTS:
+        raise KeyError(part)
+    return bool(getattr(cfg, 'return_guard', False) or getattr(cfg, f'return_guard_{part}', False))
 
 
 @dataclass

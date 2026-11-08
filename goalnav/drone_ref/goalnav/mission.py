@@ -69,6 +69,10 @@ class MissionConfig:
     stall_s: float = 25.
     return_enabled: bool = True
     return_guard: bool = False      # the return's margins, spot freeze and descent gate from homeward.py
+    return_guard_margins: bool = False   # ...or one part alone (homeward.PARTS)
+    return_guard_spot: bool = False
+    return_guard_freeze: bool = False
+    return_guard_gate: bool = False
     stop_after: str = None         # staged tests: land where it is and disarm once this goal passes
     pad_disarm: bool = False        # end on the pad: stay down until PX4 disarms (no return)
     pad_rest_s: float = 1.0         # on the pad before climbing again (under PX4's COM_DISARM_LAND)
@@ -173,7 +177,7 @@ class GoalMission:
         walls = self.spec.get('return_walls', [])
         self.homeward = homeward.HomewardConfig(feet_below_origin=self.cfg.landed_base_height)
         self.descent_gate = homeward.DescentGate(self.homeward)
-        if self.cfg.return_guard:           # Keep the touchdown spot ``reach`` from each wall.
+        if homeward.enabled(self.cfg, 'spot'):     # Keep the touchdown spot ``reach`` from each wall.
             walls = [{**w, 'offset': homeward.face_offset(w['offset'], self.homeward)} for w in walls]
         self.return_spot = ReturnSpot(self.route, self.return_xy, walls)
         face = self.spec.get('return_face')
@@ -256,7 +260,7 @@ class GoalMission:
         spot = self.return_spot
         if self.telemetry is None or self.floor.height(self.telemetry.position[2]) < 0.6:
             return                            # Low down it sees tarp skirts, not faces: keep the spot.
-        if (self.cfg.return_guard and self.state == 'RETURN_DESCEND'
+        if (homeward.enabled(self.cfg, 'freeze') and self.state == 'RETURN_DESCEND'
                 and not homeward.spot_may_move(self.floor.height(self.telemetry.position[2]), self.homeward)):
             return                            # Beside the walls: a moving spot is a sideways move.
         was = spot.measured()
@@ -944,7 +948,7 @@ class GoalMission:
         top = np.where(top > 0.7, np.maximum(top, cfg.return_unseen_top), top)
         top = np.where(m.seen, top, cfg.return_unseen_top)
         reach, margin, ceiling = cfg.return_reach, cfg.return_margin, cfg.return_height
-        if cfg.return_guard:
+        if homeward.enabled(cfg, 'margins'):
             hw = self.homeward
             reach, margin, ceiling = max(reach, hw.reach), max(margin, hw.vertical_margin), hw.max_height
         r = int(math.ceil(reach / m.res))
@@ -965,7 +969,7 @@ class GoalMission:
         height target sliding down; once landed, down until PX4 disarms."""
         h = self.floor.height(t.position[2])
         rate = 0.6 if h > 0.6 else 0.3
-        if self.cfg.return_guard:           # Beside the walls: down only while on the spot and still.
+        if homeward.enabled(self.cfg, 'gate'):     # Beside the walls: down only while on the spot and still.
             rate = self.descent_gate.rate(h, float(np.linalg.norm(self.return_xy - t.position[:2])),
                                           float(np.linalg.norm(t.velocity[:2])), dt)
         if t.landed:
