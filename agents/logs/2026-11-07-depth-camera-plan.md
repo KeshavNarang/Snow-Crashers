@@ -83,3 +83,16 @@ plan/dry-run), with known-answer synthetic data and mutation checks.
   agent may not have, from the source reading above: a dead slam pane restarts the agent (FC wedge on stock
   v1.16.2); stereo.i_aligned defaults to the absent RGB camera; rect outputs take camera_info size from left/right;
   minimum range ~0.50 m at 1024x640 with 96 disparities. Its result can be judged with acceptance.judge().
+
+## Status 19:40: depth is being delivered by the goalnav agent's config; this branch now judges it
+- Read-only look at the drone (19:32): the goalnav agent installs its own `oakd_vslam.yaml` through
+  `~/team_ws/Dockerfile` (the stack's supported team image, `host/run.sh build`; `~/skybeta` stays clean):
+  `i_pipeline_type: rgbd`, left/right/IMU as the organizers had them, colour 640x400 @ 10 Hz, and
+  `stereo: i_aligned false, i_board_socket_id 1, 640x400 (i_set_input_size 640x400)`. Its own numbers: depth
+  29.4 Hz at 640x400; full 1024x640 depth ran at 25 Hz and dragged the pair to 27.7 Hz. It found the same
+  RGB-alignment trap. Each config change restarts the stack (FC TELEM2 wedge risk on stock PX4 v1.16.2).
+- So this branch does not build a second swap. What its checks are not yet showing is GEOMETRY: with
+  `i_aligned: false` the depth is in StereoDepth's own reference frame while its camera_info says left camera.
+  `geometry_check.py` (evals first, mutation-checked) decides which frame the depth is really in against a host
+  SGBM match of the same instant. Then `acceptance.judge()` for VIO non-regression (A) and depth (B).
+- Waiting for the drone lock (held by goalnav, "camera config tests", 19:39).
