@@ -90,33 +90,48 @@ class MessyWorld(World):
             np.save(cache, label)
         return label
 
+    def _cell_codes(self):
+        """One flat uint8 per voxel (made once): bit 0 solid, bit 1 wire mesh, bit 2 near
+        something (the skip grid at voxel resolution), and the row strides. One gather on a
+        flat index replaces three fancy-indexed lookups and the skip grid's division."""
+        if getattr(self, '_codes', None) is None:
+            nx, ny, nz = self.solid.shape
+            f = self.skip_factor
+            near = self.skip.repeat(f, 0).repeat(f, 1).repeat(f, 2)[:nx, :ny, :nz]
+            codes = (self.solid.astype(np.uint8) | ((self.label == MESH).astype(np.uint8) << 1)
+                     | (near.astype(np.uint8) << 2))
+            self._codes = (codes.ravel(), ny * nz, nz)
+        return self._codes
+
     def cast(self, origin, directions, start, limit):
-        """The voxel march, with the wire mesh only partly visible this frame."""
+        """The voxel march, with the wire mesh only partly visible this frame.
+        (test/test_cast_speed.py keeps the earlier version: the hits must stay identical.)"""
         hit = np.full(len(directions), np.inf)
         active = np.arange(len(directions))
         fine, coarse = self.voxel * 0.8, self.voxel * self.skip_factor
         t = np.full(len(directions), start)
         salt = (self.frame * 2654435761) & 0xffffffff
+        codes, sx, sy = self._cell_codes()
         while active.size:
-            points = origin + directions[active] * t[active, None]
+            ta = t[active]
+            points = origin + directions[active] * ta[:, None]
             index = np.floor((points - self.origin) / self.voxel).astype(int)
-            inside = np.all((index >= 0) & (index < self.shape), axis=1) & (t[active] < limit)
+            inside = np.all((index >= 0) & (index < self.shape), axis=1) & (ta < limit)
             occupied = np.zeros(active.size, dtype=bool)
-            cells = tuple(index[inside].T)
-            solid = self.solid[cells]
-            mesh = self.label[cells] == MESH
+            cells = index[inside]
+            code = codes[cells[:, 0] * sx + cells[:, 1] * sy + cells[:, 2]]
+            solid = (code & 1).astype(bool)
+            mesh = (code & 2).astype(bool)
             if mesh.any():
-                ix, iy, iz = (c[mesh].astype(np.int64) for c in cells)
+                ix, iy, iz = cells[mesh].astype(np.int64).T
                 h = ((ix * 73856093) ^ (iy * 19349663) ^ (iz * 83492791) ^ salt) % 1000
-                seen = solid.copy()
-                seen[np.nonzero(mesh)[0][h >= MESH_RETURN * 1000]] = False
-                solid = seen
+                solid[np.nonzero(mesh)[0][h >= MESH_RETURN * 1000]] = False
             occupied[inside] = solid
-            hit[active[occupied]] = t[active[occupied]]
+            hit[active[occupied]] = ta[occupied]
             near = np.ones(active.size, dtype=bool)
-            near[inside] = self.skip[tuple((index[inside] // self.skip_factor).T)]
+            near[inside] = (code & 4).astype(bool)
             keep = ~occupied & inside
-            t[active] += np.where(near, fine, coarse)
+            t[active] = ta + np.where(near, fine, coarse)
             active = active[keep]
         return hit
 
