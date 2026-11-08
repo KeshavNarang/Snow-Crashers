@@ -66,3 +66,8 @@ Nothing written or started on the drone (scripts piped over stdin). teammates' `
   rational_polynomial all zeros, TF left->right 0.075 m; cv2 4.5.4, cv_bridge, message_filters,
   sensor_msgs_py; `overwall_nav.stereo` importable with team_ws sourced; rosbag2_storage_mcap and
   skybeta_flight_interface installed. overwall.launch.py runs flight_interface with max_altitude_m 2.5.
+
+Read with a0fa7cb (depth-bottleneck log, same evening): once warmed up (~5 min) the machine was 45 % idle and
+the cameras ~28 Hz; overwall's stereo_depth is bound by its single Python thread (receive + sync of ~28
+pairs/s + match), topping out at 3.4-4 Hz. goalnav's stereo_node has the same structure, so expect <= ~4 Hz
+depth on the drone (the simulator assumes 4.5). A threaded or C++ node, or on-camera depth, would lift both.
