@@ -25,11 +25,18 @@ VIO fusion (vision 665 ms old, 2026-11-07 23:49). Depth comes from goalnav's `st
 Jetson (goalnav.launch.py, camera:=rgbstereo). Slow: `safe` profile, 0.4 m/s; 0.5 s on the pad, then
 the return. Over USB, put `DRONE_HOST=192.168.55.1` in front of each command (Wi-Fi needs nothing).
 
+Do steps 1-2 **off the pad** so nobody waits on the warm-up.
+
 1. `tools/fly deploy "<your name>"`: copies goalnav, makes sure the camera runs RGBSTEREO, picks
-   goalnav. Power-cycle, wait ~3 min, then 5 min more before measuring anything.
-2. `tools/fly bench`: props off, ~1 min, read-only: goalnav + stereo_node up, depth >= 3 Hz, PX4 fusion.
-3. `tools/fly check`: the camera pipeline must PASS (RGBSTEREO), PX4 link up, goalnav status printed.
-4. Pilot: Altitude, arm, Position. Kill switch in hand. Then `tools/fly logs`, `tools/fly done`.
+   goalnav. Then reboot the Jetson (`sudo systemctl reboot` on it: a battery cycle does not reboot it
+   while it has other power). Wait ~3 min to boot, then **5 min more** before measuring.
+2. `tools/fly bench` (props off, ~1.5 min, read-only): needs PX4 fusion >= 95 % over 30 s, median
+   vision age < 150 ms, depth >= 3 Hz. It also prints CPU per process. NO-GO: stop, do not take the pad.
+3. On the course: check the props clear barrier panel 1's stand at the launch mark (its struts and
+   feet now face the launch corridor). If tight, place the drone further north on the mark.
+4. On the pad: `tools/fly check`, then the pilot: Altitude, arm, Position. Kill switch in hand.
+   goalnav holds still whenever PX4 loses vision (6 s: it comes down where it is).
+5. After: `tools/fly logs`, `python3 tools/postflight.py flight-logs/<run>`, `tools/fly done`.
 
 ## The four commands
 
