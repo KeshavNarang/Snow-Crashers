@@ -78,7 +78,7 @@ def scenario_flags(name, path=SCENARIOS):
 
 def launch_default_profile(path=LAUNCH_FILE):
     """The profile the drone flies: the launch file's default (it is started without arguments)."""
-    found = re.search(r"'profile':\s*\('([^']+)'", Path(path).read_text())
+    found = re.search(r"\('profile',\s*'([^']+)'", Path(path).read_text())
     if not found:
         raise ValueError(f'no profile default in {path}')
     return found.group(1)
