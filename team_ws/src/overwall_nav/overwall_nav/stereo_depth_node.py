@@ -130,7 +130,7 @@ class StereoDepthNode(Node):
         right = self.bridge.imgmsg_to_cv2(right_msg, 'mono8')
         pts, valid = self.rig.points(left, right)
         cells = bin_points(level(pts, self.pitch), self.corridor)
-        floor = fit_floor(pts)
+        floor = fit_floor(pts, pitch_deg=self.pitch)
         reading = {'cells': cells, 'top_edge_deg': round(self.top_edge, 2), 'floor': floor,
                    'pitch_deg': self.pitch, 'tf_pitch_deg': self.tf_pitch,
                    'valid': round(valid, 3), 'n': int(len(pts)),
