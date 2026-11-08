@@ -125,8 +125,11 @@ through the organizers' `skybeta_flight_interface`
   pose: if goalnav stalls, the twist expires and PX4 holds where it is (no
   stale pose to fly back to), and the landings can go below the pose floor.
   There is no arm, disarm, mode or land command: takeoff is an upward twist,
-  every landing a downward one held until PX4 disarms, and ABORTED descends
-  where it is.
+  every landing a downward one held until PX4 disarms. Giving up
+  (no progress, the pad not seen) flies home on the return, high over
+  everything mapped and down onto the launch spot; only with the estimate
+  invalid or no time left does it descend where it is (ABORTED): blind
+  descents found rocks and stand feet in the simulator.
 
 ## The simulator: the course as built
 
