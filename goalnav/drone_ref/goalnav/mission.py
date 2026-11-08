@@ -286,6 +286,7 @@ class GoalMission:
         was = spot.measured()
         spot.observe(np.asarray(origin, float), np.asarray(points, float), self.floor.floor_z)
         self.return_xy = self.return_xy + 0.2 * (spot.target() - self.return_xy)
+        self.return_xy = np.array(homeward.keep_off(self.return_xy, self._return_wall_lines()))
         if not was and spot.measured():
             shift = spot.target() - spot.base
             self.status.events.append((round(self.telemetry.t, 3), 'return spot', f'{shift[0]:+.2f} {shift[1]:+.2f}'))
@@ -901,6 +902,7 @@ class GoalMission:
         cfg = self.cfg
         if self.return_from is None:
             self.return_from, self.return_profile_at = t.position[:2].copy(), -math.inf
+            self.return_xy = np.array(homeward.keep_off(self.return_xy, self._return_wall_lines()))
         start, target = self.return_from, self.return_xy
         line = target - start
         length = max(float(np.linalg.norm(line)), 1e-6)
@@ -913,7 +915,11 @@ class GoalMission:
             self.return_profile, self.return_profile_at = self._return_profile(start, tangent, length), t.t
         grid, profile = self.return_profile
         h = self.floor.height(t.position[2])
-        wanted = float(np.interp(np.clip(s + np.array([0., 0.15, 0.3, 0.45]), 0., length), grid, profile).max())
+        ahead = np.clip(s + np.array([0., 0.15, 0.3, 0.45]), 0., length)
+        wanted = float(np.interp(ahead, grid, profile).max())
+        # Near a known return wall (barrier, M1) the feet stay over its top, whatever the map says.
+        wanted = max(wanted, homeward.wall_floor([p] + list(start + tangent * ahead[:, None]),
+                                                 self._return_wall_lines(), self.cfg.landed_base_height))
         speed = min(cfg.return_speed, math.sqrt(2. * cfg.return_brake * max(left - self._return_short(t, left), 0.)))
         below = wanted - h
         if below > 0.05:                  # Climbing: no faster along than the climb keeps up with.
@@ -933,6 +939,13 @@ class GoalMission:
             self._enter('RETURN_DESCEND', t.t)
         return Setpoint(np.array([*(tangent * speed), vz]), self.follower.yaw, position=position,
                         acceleration=np.array([*np.clip(accel, -2., 2.), az]))
+
+    def _return_wall_lines(self):
+        """goals.yaml ``return_walls`` as segments in the odometry frame."""
+        if getattr(self, 'return_wall_lines', None) is None:
+            self.return_wall_lines = [tuple(self.route.cad_point(q) for q in w['wall'])
+                                      for w in self.spec.get('return_walls', [])]
+        return self.return_wall_lines
 
     def _return_short(self, t, left, short=0.4, wait_s=3.):
         """How far short of the touchdown spot to stop: ``short`` until the
