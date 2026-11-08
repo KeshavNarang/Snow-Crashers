@@ -32,9 +32,10 @@ class CheeseLaunchMatchesSim(unittest.TestCase):
         self.run = RUN.read_text()
 
     def test_colour_camera_for_the_pad(self):
-        self.assertIn('--colour', self.run)
-        self.assertEqual(self.args['image_topic'], '/oak/rgb/image_raw')
-        self.assertEqual(self.args['image_info_topic'], '/oak/rgb/camera_info')
+        self.assertIn('--camera rgbstereo', self.run)
+        self.assertEqual(self.args['camera'], 'rgbstereo')
+        modes = _assigned(ROOT / 'launch' / 'goalnav.launch.py', 'CAMERA_MODES')
+        self.assertEqual(modes['rgbstereo']['goalnav']['pad_image_topic'], '/oak/rgb/image_raw')
 
     def test_same_goals_profile_and_tuning(self):
         tunes = dict(t.split('=', 1) for t in re.findall(r'--tune (\S+)', self.run))

@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 exec python3 -m localsim.goalrun \
-  --seed 1 --severity 0.7 --duration 90 --colour --camera-hz 2.8 --camera-latency 0.4 \
+  --seed 1 --severity 0.7 --duration 90 --camera rgbstereo --camera-hz 2.8 --camera-latency 0.4 \
   --set "goals_file=$PWD/config/cheese_goals.yaml" \
   --tune cruise_height=2.25 --tune handover_height=2.15 \
   --tune return_enabled=false --tune pad_disarm=true \

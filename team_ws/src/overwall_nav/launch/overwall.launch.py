@@ -38,7 +38,7 @@ LOG_ROOT = '/root/team_ws/logs/overwall'
 # Small topics only (~30 kB/s): what the mission saw, decided and commanded. PX4's view (armed, mode,
 # landed, local position) is in /skybeta/state: on skybeta-03 `ros2 bag record` never discovered the
 # /fmu/out/* topics (tried with best-effort QoS overrides too), so they are not listed here.
-BAG_TOPICS = ['/overwall/front', '/overwall/pad', '/skybeta/state', '/skybeta/setpoint/pose',
+BAG_TOPICS = ['/overwall/front', '/overwall/pad', '/overwall/remote', '/skybeta/state', '/skybeta/setpoint/pose',
               '/skybeta/setpoint/twist', '/visual_slam/tracking/odometry', '/rosout']
 
 
@@ -50,7 +50,9 @@ def generate_launch_description():
     os.makedirs(run_dir, exist_ok=True)
     logging = [
         SetEnvironmentVariable('ROS_LOG_DIR', run_dir),            # every node's log file goes here
-        ExecuteProcess(cmd=['ros2', 'bag', 'record', '-s', 'mcap', '-o', os.path.join(run_dir, 'bag')] + BAG_TOPICS,
+        # No write cache (default 100 MB in memory): a power-off lost the whole flight's bag.
+        ExecuteProcess(cmd=['ros2', 'bag', 'record', '-s', 'mcap', '--max-cache-size', '0',
+                            '-o', os.path.join(run_dir, 'bag')] + BAG_TOPICS,
                        output='log', condition=IfCondition(LaunchConfiguration('record'))),
     ]
     flight_interface = Node(
@@ -62,6 +64,8 @@ def generate_launch_description():
                  output='screen', emulate_tty=True, parameters=[settings])
     pad = Node(package='overwall_nav', executable='pad_detect', name='pad_detect',
                output='screen', emulate_tty=True, parameters=[settings])
+    remote = Node(package='overwall_nav', executable='remote_link', name='remote_link',
+                  output='screen', emulate_tty=True, parameters=[settings])
     mission = Node(package='overwall_nav', executable='overwall_mission', name='overwall_mission',
                    output='screen', emulate_tty=True, parameters=[settings])
-    return LaunchDescription(declared + logging + [flight_interface, depth, pad, mission])
+    return LaunchDescription(declared + logging + [flight_interface, depth, pad, remote, mission])
