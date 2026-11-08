@@ -41,14 +41,15 @@ GOALNAV = [
     ('tuning', '', 'YAML overrides, e.g. "{stop_after: corridor_1, max_speed: 0.4}"'),
     ('log_dir', '~/team_ws/logs', 'one folder per launch is made in here'),
     ('record', 'true', 'record the rosbag'),
-    ('record_video', 'true', 'include both mono camera streams in it (~40 MB/s)'),
+    ('record_colour', 'false', 'include the colour images (pad debugging, ~8 MB/s)'),
+    ('record_video', 'false', 'include both mono camera streams in it (~40 MB/s)'),
     ('camera', 'rgbstereo', 'camera pipeline: rgbstereo (team config) or rgbd (on-camera depth)'),
 ]
 
 # What each camera pipeline gives goalnav (goalnav_node PARAMS) and whether our stereo node runs.
 CAMERA_MODES = {
     'rgbstereo': {'stereo_node': True,
-                  'goalnav': {'depth_topic': '', 'points_topic': '/goalnav/stereo/points',
+                  'goalnav': {'depth_topic': '', 'points_topic': '/goalnav/stereo/points', 'image_topic': '',
                               'pad_image_topic': '/oak/rgb/image_raw', 'pad_info_topic': '/oak/rgb/camera_info'}},
     'rgbd': {'stereo_node': False,
              'goalnav': {'depth_topic': '/oak/stereo/image_raw', 'points_topic': '',
@@ -56,8 +57,12 @@ CAMERA_MODES = {
 }
 
 VIDEO = ['/oak/left/image_mono', '/oak/right/image_mono']
+COLOUR = ['/oak/rgb/image_raw']                  # record_colour:=true for pad debugging (~8 MB/s)
+# stereo_node: depth at most this often. 5-8 Hz measured on skybeta-03; the sim plans with 2.8 Hz;
+# fewer frames leave the cores to cuVSLAM (vision was late with goalnav running, 2026-11-08).
+STEREO = {'rate_hz': 4.0}
 TOPICS = ['/oak/left/camera_info', '/oak/right/camera_info', '/oak/imu/data',
-          '/oak/stereo/image_raw', '/oak/stereo/camera_info', '/oak/rgb/image_raw', '/oak/rgb/camera_info',
+          '/oak/stereo/image_raw', '/oak/stereo/camera_info', '/oak/rgb/camera_info',
           '/visual_slam/tracking/odometry', '/visual_slam/status',
           '/fmu/out/vehicle_local_position', '/fmu/out/vehicle_attitude', '/fmu/out/vehicle_status_v1',
           '/fmu/out/vehicle_land_detected', '/fmu/out/vehicle_control_mode', '/fmu/out/estimator_status_flags',
@@ -74,7 +79,7 @@ def _logger(context):
     with open(os.path.join(run, 'run.json'), 'w') as handle:
         json.dump({'started': datetime.now().isoformat(timespec='seconds'), 'host': socket.gethostname(),
                    'args': {name: get(name) for name, _, _ in INTERFACE + GOALNAV}}, handle, indent=1)
-    topics = TOPICS + (VIDEO if get('record_video') == 'true' else [])
+    topics = TOPICS + (VIDEO if get('record_video') == 'true' else []) + (COLOUR if get('record_colour') == 'true' else [])
     record = ExecuteProcess(cmd=['ros2', 'bag', 'record', '-s', 'mcap', '--max-bag-size', str(2 << 30),
                                  '-o', os.path.join(run, 'bag')] + topics,
                             output='both', condition=IfCondition(LaunchConfiguration('record')))
@@ -105,5 +110,5 @@ def _navigation(context):
                    parameters=[{**{name: ParameterValue(LaunchConfiguration(name), value_type=str)
                                    for name in ('profile', 'tuning', 'goals_file')}, **mode['goalnav']}])
     stereo = Node(package='drone_ref', executable='stereo_node', name='drone_ref_stereo',
-                  output='screen', emulate_tty=True)
+                  output='screen', emulate_tty=True, parameters=[STEREO])
     return [stereo, goalnav] if mode['stereo_node'] else [goalnav]
