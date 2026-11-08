@@ -8,6 +8,11 @@ stereo_depth:
     camera_pitch_deg: 27.0     # camera holder angle, degrees DOWN
     rate_hz: 5.0               # what the Jetson sustains with VIO running
 
+pad_detect:
+  ros__parameters:
+    camera_pitch_deg: 27.0     # same holder as the mono pair
+    rate_hz: 5.0
+
 overwall_mission:
   ros__parameters:
     start_to_wall_m: 0.686     # 27 in: take-off spot to the wall (check, and fallback with no depth)
@@ -22,4 +27,8 @@ overwall_mission:
     net_top_m: 2.896           # 9.5 ft: top of the net above the floor
     net_clearance_m: 0.4       # the drone's top stays at least this far below the net
     approach_speed_mps: 0.2    # slow: depth runs ~3-5 Hz on the Jetson
+    look_beyond_wall_m: 0.55   # with pad_detect running: drone centre this far past the wall to look
+    look_height_m: 0.8         # camera this high above the floor when looking for the pad
+    search_yaw_deg: 35.0       # pad not in view there: turn this far left and right once, then land
+                               # land_beyond_wall_m past the wall as before
     camera_height_m: 0.11      # camera above the floor when landed (used if the floor fit is unreliable)
