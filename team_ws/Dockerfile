@@ -1,8 +1,7 @@
-# Team image (host/run.sh build): the skybeta base plus our camera config.
-# The stack's camera launch reads oakd_vslam_bringup's config/oakd_vslam.yaml and takes
-# no override, so we replace that file in the image: same mono pair and IMU for cuVSLAM,
-# plus on-camera stereo depth and the colour camera (camera/oakd_vslam.yaml).
-# Undo: rm ~/team_ws/Dockerfile (or docker rmi skybeta-team:<tag>), docker rm -f skybeta-stack.
+# SnowCrashers team image: the skybeta base with one file replaced, the camera config
+# (camera/oakd_vslam.yaml = stock + colour camera). Our ROS code is NOT in here (src/ is
+# bind-mounted). Build: cd ~/skybeta && host/run.sh build, then power-cycle.
+# Undo (stock camera): mv ~/team_ws/Dockerfile elsewhere, power-cycle.
 ARG BASE
 FROM ${BASE}
 
