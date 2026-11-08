@@ -45,6 +45,14 @@ heading_walls:
 # The return mark, from the launch: [right, ahead] of its heading (m); ahead
 # keeps it off the barrier behind the launch (2 ft tolerance on the mark).
 return_offset: [0.0, 0.20]
+# ...then moved (at most 0.3 m) to stand this far from each wall's face, the
+# faces measured from depth seen on the way down (the odometry has drifted by
+# then; drone_ref/goalnav/return_spot.py). M1's corridor face: the corridor is
+# one short panel from M1 to the nearly invisible west net, so 0.50 m puts the
+# rotor tips ~0.2 m from each. The barrier's north face: the mark is ~0.41 m off it.
+return_walls:
+  - {wall: [[-1.98, 0.65], [-1.88, 1.65]], offset: 0.50}    # M1, its south half
+  - {wall: [[-2.90, 0.324], [-2.15, 0.402]], offset: 0.60}  # the barrier's first panel, west of M1
 # The takeoff's climb is held this far off the launch spot ([right, ahead], m):
 # away from the barrier behind it and the nearly invisible net on its left.
 takeoff_offset: [0.05, 0.08]
