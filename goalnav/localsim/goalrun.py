@@ -27,6 +27,7 @@ sys.path.insert(0, str(ROOT))
 # reaches the vehicle through its clamps, conversions and 10 Hz output.
 sys.path.insert(0, str(ROOT.parent / 'skybetav1/src/skybeta_flight_interface'))
 
+from drone_ref.goalnav.geometry import depth_points    # noqa: E402
 from localsim import fakeros as m                      # noqa: E402
 from localsim import messy_course, messy_ladder        # noqa: E402
 from localsim.aero import WallField                    # noqa: E402
@@ -45,6 +46,20 @@ PILOT_SWITCH_NS = 1_500_000_000     # arm, then switch to Position "within a few
 DEPTH_TOPIC, DEPTH_INFO_TOPIC = '/oak/stereo/image_raw', '/oak/stereo/camera_info'
 RGB_TOPIC, RGB_INFO_TOPIC = '/oak/rgb/image_raw', '/oak/rgb/camera_info'
 MONO_TOPIC, MONO_INFO_TOPIC = '/oak/left/image_mono', '/oak/left/camera_info'   # without --colour
+# What drone_ref.stereo_node publishes from the mono pair (the drone's RGBSTEREO camera config).
+POINTS_TOPIC = '/goalnav/stereo/points'
+# The camera pipelines the drone can run (goalnav.launch.py CAMERA_MODES; test_sim_camera.py keeps the
+# goalnav topics equal). rgbstereo, the team config: stereo_node depth on the Jetson, ~4.5 Hz and
+# ~0.13 s old (agents/logs/2026-11-07-depth-bottleneck.md), the pad found in colour. rgbd: the
+# OAK-D's own depth (it cost PX4 its VIO fusion on skybeta-03).
+SIM_CAMERAS = {
+    'rgbstereo': {'hz': 4.5, 'latency': 0.13,
+                  'goalnav': {'depth_topic': '', 'points_topic': POINTS_TOPIC,
+                              'pad_image_topic': RGB_TOPIC, 'pad_info_topic': RGB_INFO_TOPIC}},
+    'rgbd': {'hz': 10., 'latency': 0.1,
+             'goalnav': {'depth_topic': DEPTH_TOPIC, 'points_topic': '',
+                         'pad_image_topic': RGB_TOPIC, 'pad_info_topic': RGB_INFO_TOPIC}},
+}
 # The left mono camera as skybeta-03's TF has it: 27.6 deg down, (0.105, 0.038, 0.030) m;
 # 1024x640 at fx 638 (77.5 deg). goalnav itself assumes 27.0 deg.
 CAMERA_PITCH_DEG = 27.6
@@ -174,10 +189,14 @@ def build_parser():
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--severity', type=float, default=1.0)
     parser.add_argument('--duration', type=float, default=150.)
-    parser.add_argument('--camera-hz', type=float, default=10., help='depth and colour frames per second')
-    parser.add_argument('--camera-latency', type=float, default=0.1, help='camera frame age, s')
+    parser.add_argument('--camera', choices=sorted(SIM_CAMERAS), default='rgbstereo',
+                        help='camera pipeline as on the drone (goalnav.launch.py camera:=); default %(default)s')
+    parser.add_argument('--camera-hz', type=float, default=None,
+                        help='depth frames per second (default: the pipeline value, rgbstereo 4.5, rgbd 10)')
+    parser.add_argument('--camera-latency', type=float, default=None,
+                        help='depth frame age, s (default: the pipeline value, rgbstereo 0.13, rgbd 0.1)')
     parser.add_argument('--colour', action='store_true',
-                        help='run the colour camera (finds the pad); the drone currently runs mono only')
+                        help='rgbd only: colour as the tape/pad image (rgbstereo always gives the pad colour)')
     parser.add_argument('--set', action='append', default=[], metavar='PARAM=VALUE')
     parser.add_argument('--vehicle', action='append', default=[], metavar='FIELD=VALUE')
     parser.add_argument('--out', default=None)
@@ -194,8 +213,16 @@ def build_parser():
     return parser
 
 
+def camera_timing(args):
+    """(frames per second, frame age s): --camera-hz / --camera-latency, else the pipeline values."""
+    mode = SIM_CAMERAS[args.camera]
+    return (float(args.camera_hz if args.camera_hz is not None else mode['hz']),
+            float(args.camera_latency if args.camera_latency is not None else mode['latency']))
+
+
 def main(argv=None):
     args = build_parser().parse_args(argv)
+    args.camera_hz, args.camera_latency = camera_timing(args)
     out = Path(args.out or ROOT / f'localsim/out/goalnav/seed{args.seed}')
     out.mkdir(parents=True, exist_ok=True)
     wall = time.time()
@@ -204,8 +231,8 @@ def main(argv=None):
     obj, meta_path = messy_course.save(course, out / 'course')
     meta = json.loads(meta_path.read_text())
     world = MessyWorld(obj, meta, seed=args.seed, cache_dir=ROOT / 'localsim/.cache')
-    colour = {'image_topic': RGB_TOPIC, 'image_info_topic': RGB_INFO_TOPIC} if args.colour else {}
-    params = {'drone_ref_goalnav': {**colour,
+    colour = {'image_topic': RGB_TOPIC, 'image_info_topic': RGB_INFO_TOPIC} if args.colour and args.camera == 'rgbd' else {}
+    params = {'drone_ref_goalnav': {**SIM_CAMERAS[args.camera]['goalnav'], **colour,
                                     'goals_file': str(ROOT / 'config/goals.yaml'),
                                     'profile': args.profile,
                                     'tuning': yaml.safe_dump({k: yaml.safe_load(v) for k, v in
@@ -300,15 +327,24 @@ def fly(args, bus, world, camera, vehicle, mission, referee, recorder, meta, rng
         shown = None
         while queue and queue[0][0] <= bus.ns:
             _, captured, depth, colour, pose = queue.pop(0)
-            for topic, message in depth_messages(camera, depth, captured, rng):
-                bus.publish(topic, message)
-            if args.colour:
-                image, topics = colour, (RGB_TOPIC, RGB_INFO_TOPIC, 'rgb8')
+            if args.camera == 'rgbstereo':
+                # stereo_node's points from the mono pair; the mono image for the tape, colour for the pad.
+                bus.publish(POINTS_TOPIC, stereo_points(camera, depth, captured, rng))
+                mono = (colour.astype(float) @ [0.299, 0.587, 0.114]).astype(np.uint8)
+                for topic, message in image_messages(rgb_camera, mono, captured, MONO_TOPIC, MONO_INFO_TOPIC, 'mono8'):
+                    bus.publish(topic, message)
+                for topic, message in image_messages(rgb_camera, colour, captured, RGB_TOPIC, RGB_INFO_TOPIC, 'rgb8'):
+                    bus.publish(topic, message)
             else:
-                image = (colour.astype(float) @ [0.299, 0.587, 0.114]).astype(np.uint8)
-                topics, colour = (MONO_TOPIC, MONO_INFO_TOPIC, 'mono8'), np.repeat(image[..., None], 3, 2)
-            for topic, message in image_messages(rgb_camera, image, captured, *topics):
-                bus.publish(topic, message)
+                for topic, message in depth_messages(camera, depth, captured, rng):
+                    bus.publish(topic, message)
+                if args.colour:
+                    image, topics = colour, (RGB_TOPIC, RGB_INFO_TOPIC, 'rgb8')
+                else:
+                    image = (colour.astype(float) @ [0.299, 0.587, 0.114]).astype(np.uint8)
+                    topics, colour = (MONO_TOPIC, MONO_INFO_TOPIC, 'mono8'), np.repeat(image[..., None], 3, 2)
+                for topic, message in image_messages(rgb_camera, image, captured, *topics):
+                    bus.publish(topic, message)
             shown = ((captured - begin) / 1e9, colour, depth, pose)
         if shown is not None and recorder.detector is not None:
             recorder.detector.last = None              # Set again only if the node looks at this frame.
@@ -418,6 +454,18 @@ def image_messages(camera, image, ns, topic, info_topic, encoding):
                   step=camera.width * channels, data=m.array('B', image.tobytes()))
     k = np.array([camera.fx, 0, camera.width / 2, 0, camera.fx, camera.height / 2, 0, 0, 1.])
     return [(topic, msg), (info_topic, m.CameraInfo(header=header, height=camera.height, width=camera.width, k=k))]
+
+
+def stereo_points(camera, depth_mm, ns, rng):
+    """What drone_ref.stereo_node gives from the mono pair: points in the left camera's frame,
+    about half matched, 0.2-6 m (PointCloud2, x y z float32)."""
+    points = depth_points(depth_mm.astype(np.float32) / 1000., camera.fx, camera.fx, camera.cx, camera.cy,
+                          tile=camera.stride, min_depth=STEREO_RANGE[0], max_depth=STEREO_RANGE[1])
+    points = points[rng.random(len(points)) >= STEREO_DROP].astype(np.float32)
+    header = m.Header(stamp=stamp(ns), frame_id='oak_left_camera_optical_frame')
+    return m.PointCloud2(header=header, width=len(points), height=1, point_step=12, row_step=12 * len(points),
+                         fields=[m.PointField(name=n, offset=4 * i) for i, n in enumerate('xyz')],
+                         data=m.array('B', points.tobytes()))
 
 
 def depth_messages(camera, depth_mm, ns, rng):
