@@ -14,11 +14,13 @@ from pathlib import Path
 
 import numpy as np
 
-from localsim.messy_world import MESH, PVC, TARP
+from localsim.messy_world import ALUMINIUM, FIBREGLASS, LADDER_TOP, MESH, PVC, TARP
 
 ROOT = Path(__file__).resolve().parents[1]
 ORANGE = np.array([226, 92, 44], float)
 BLUE_TARP = np.array([38, 92, 190], float)      # the next course's floor
+# The stepladder, from the photos (hall light): teal-blue rails near the mat's blue, a yellow top, bare aluminium.
+LADDER_COLOURS = {FIBREGLASS: [60, 118, 140], LADDER_TOP: [221, 187, 77], ALUMINIUM: [150, 146, 140]}
 PEOPLE = np.array([[40, 70, 160], [35, 35, 40], [150, 40, 40], [60, 110, 70], [30, 60, 150], [200, 200, 205]], float)
 
 
@@ -123,6 +125,8 @@ def render(world, camera, painter, position, rotation, rng):
         colour = np.where((label == TARP)[:, None], _tarp_colour(world, p), [208, 182, 138])
         colour = np.where((label == MESH)[:, None], [45, 40, 34], colour)
         colour = np.where((label == PVC)[:, None], [24, 24, 26], colour)
+        for value, rgb_value in LADDER_COLOURS.items():
+            colour = np.where((label == value)[:, None], rgb_value, colour)
         rgb[solid] = colour * shade
     rest = ~on_floor & ~solid
     if rest.any():
