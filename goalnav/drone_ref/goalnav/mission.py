@@ -30,6 +30,7 @@ from drone_ref.goalnav.goals import Route, opening_axis, refine, wall_line, wall
 from drone_ref.goalnav.floor_line import LineMap, turn_along
 from drone_ref.goalnav.livemap import OCCUPIED as OCCUPIED_LOGODDS, Fence, LiveMap
 from drone_ref.goalnav.planner import Planner, clearance
+from drone_ref.goalnav import homeward
 from drone_ref.goalnav.return_spot import ReturnSpot
 from drone_ref.goalnav.window import WindowManeuver
 
@@ -67,7 +68,8 @@ class MissionConfig:
     time_limit: float = 170.
     stall_s: float = 25.
     return_enabled: bool = True
-    stop_after: str = None          # staged tests: land where it is and disarm once this goal passes
+    return_guard: bool = False      # the return's margins, spot freeze and descent gate from homeward.py
+    stop_after: str = None         # staged tests: land where it is and disarm once this goal passes
     pad_disarm: bool = False        # end on the pad: stay down until PX4 disarms (no return)
     pad_rest_s: float = 1.0         # on the pad before climbing again (under PX4's COM_DISARM_LAND)
     pad_lookout_reach: float = 0.2  # at a pad lookout within this
@@ -168,7 +170,12 @@ class GoalMission:
         self.takeoff_xy = p[:2] + t_right * np.array([s, -c]) + t_ahead * np.array([c, s])
         yaw = yaw_of(telemetry.rotation)
         self.route = Route(self.spec, p[:2], yaw)
-        self.return_spot = ReturnSpot(self.route, self.return_xy, self.spec.get('return_walls', []))
+        walls = self.spec.get('return_walls', [])
+        self.homeward = homeward.HomewardConfig(feet_below_origin=self.cfg.landed_base_height)
+        self.descent_gate = homeward.DescentGate(self.homeward)
+        if self.cfg.return_guard:           # Keep the touchdown spot ``reach`` from each wall.
+            walls = [{**w, 'offset': homeward.face_offset(w['offset'], self.homeward)} for w in walls]
+        self.return_spot = ReturnSpot(self.route, self.return_xy, walls)
         face = self.spec.get('return_face')
         self.return_face = self.route.cad_point(face) if face is not None else None
         self.map = LiveMap(self.route.net_centre(), floor_z)
@@ -249,6 +256,9 @@ class GoalMission:
         spot = self.return_spot
         if self.telemetry is None or self.floor.height(self.telemetry.position[2]) < 0.6:
             return                            # Low down it sees tarp skirts, not faces: keep the spot.
+        if (self.cfg.return_guard and self.state == 'RETURN_DESCEND'
+                and not homeward.spot_may_move(self.floor.height(self.telemetry.position[2]), self.homeward)):
+            return                            # Beside the walls: a moving spot is a sideways move.
         was = spot.measured()
         spot.observe(np.asarray(origin, float), np.asarray(points, float), self.floor.floor_z)
         self.return_xy = self.return_xy + 0.2 * (spot.target() - self.return_xy)
@@ -933,24 +943,31 @@ class GoalMission:
         # (0.53 m) is a wall or the tunnel, as tall as one.
         top = np.where(top > 0.7, np.maximum(top, cfg.return_unseen_top), top)
         top = np.where(m.seen, top, cfg.return_unseen_top)
-        r = int(math.ceil(cfg.return_reach / m.res))
+        reach, margin, ceiling = cfg.return_reach, cfg.return_margin, cfg.return_height
+        if cfg.return_guard:
+            hw = self.homeward
+            reach, margin, ceiling = max(reach, hw.reach), max(margin, hw.vertical_margin), hw.max_height
+        r = int(math.ceil(reach / m.res))
         di, dj = np.mgrid[-r:r + 1, -r:r + 1]
-        disk = np.hypot(di, dj) * m.res <= cfg.return_reach
+        disk = np.hypot(di, dj) * m.res <= reach
         di, dj = di[disk], dj[disk]
         s = np.arange(0., length + step, step)
         need = np.zeros(len(s))
         for k, q in enumerate(start + tangent * s[:, None]):
             i, j = m.cell(q)
             ii, jj = np.clip(i + di, 0, m.n - 1), np.clip(j + dj, 0, m.n - 1)
-            need[k] = top[ii, jj].max() + cfg.landed_base_height + cfg.return_margin
+            need[k] = top[ii, jj].max() + cfg.landed_base_height + margin
         profile = (need[None, :] - cfg.return_slope * np.abs(s[:, None] - s[None, :])).max(axis=1)
-        return s, np.clip(profile, 0., cfg.return_height)
+        return s, np.clip(profile, 0., ceiling)
 
     def _return_descend(self, t, dt):
         """Straight down onto the return mark, its position held stiffly, the
         height target sliding down; once landed, down until PX4 disarms."""
         h = self.floor.height(t.position[2])
         rate = 0.6 if h > 0.6 else 0.3
+        if self.cfg.return_guard:           # Beside the walls: down only while on the spot and still.
+            rate = self.descent_gate.rate(h, float(np.linalg.norm(self.return_xy - t.position[:2])),
+                                          float(np.linalg.norm(t.velocity[:2])), dt)
         if t.landed:
             return self._hold(t, vz=-0.3)       # Down until PX4 disarms it (COM_DISARM_LAND).
         self.descend_h = max(self.descend_h - rate * dt, -0.1)
