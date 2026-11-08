@@ -20,6 +20,7 @@ import math
 import numpy as np
 
 BIN = 0.05
+_DENSE_CELLS = 1 << 20      # bincount path while the cell grid spanned is at most this big (8 MB)
 
 
 def bin_points(flu, corridor=0.4, min_count=3):
@@ -29,7 +30,17 @@ def bin_points(flu, corridor=0.4, min_count=3):
     if len(flu) == 0:
         return []
     idx = np.floor(flu[:, [0, 2]] / BIN).astype(np.int64)
-    keys, counts = np.unique(idx, axis=0, return_counts=True)
+    f, u = idx[:, 0], idx[:, 1]
+    f0, u0 = int(f.min()), int(u.min())
+    width = int(u.max()) - u0 + 1
+    if (int(f.max()) - f0 + 1) * width <= _DENSE_CELLS:
+        # Dense counting: one integer per cell (forward-major, so ascending order = the sorted
+        # (forward, up) order np.unique gave), counted with bincount. np.unique(axis=0) on an N x 2
+        # array is a slow structured sort (44 % of a frame's post-matching time before this).
+        counts = np.bincount((f - f0) * width + (u - u0))
+        cells = np.flatnonzero(counts >= max(min_count, 1))
+        return [[int(c // width) + f0, int(c % width) + u0, int(counts[c])] for c in cells]
+    keys, counts = np.unique(idx, axis=0, return_counts=True)     # huge spread: the original path
     keep = counts >= min_count
     return [[int(f), int(u), int(n)] for (f, u), n in zip(keys[keep], counts[keep])]
 
