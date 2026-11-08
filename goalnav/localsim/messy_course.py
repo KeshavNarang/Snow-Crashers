@@ -38,7 +38,9 @@ LAUNCH = (-2.5146, 0.9144)
 PAD = (-2.04216, -0.79248, 0.76188)
 BOULDERS = [(2.01, -2.47), (2.53, -1.55), (0.79, -2.35)]    # in the east room; more by the mat (PAD_ROCKS)
 # Walls: CAD group, the end that is attached ('barrier', 'north'/'south' net, or None).
-WALLS = {'M1': ('M1 maze divider', 'barrier'), 'M2': ('M2 maze divider', 'north'),
+# As rebuilt (photos/Changed_Walls.jpeg, 2026-11-07): M2, the north-net divider
+# the drone went around second, is gone, so the maze is M1 then M3.
+WALLS = {'M1': ('M1 maze divider', 'barrier'),
          'M3': ('M3 maze divider', 'barrier'), 'C1': ('C1 chicane wall', 'barrier'),
          'A1': ('A1 approach wall', 'barrier'), 'C2a': ('C2a chicane wall (window)', 'south')}
 # As scanned (2026-11-06, assets/course-scan.npz from tools/course_scan.py): the window wall is
@@ -50,10 +52,15 @@ WINDOW_WALL_INSET = (0.03, 0.10)  # its south end this far inside the south net
 # Walls the scan places away from the CAD (m, CAD axes): the maze's two
 # eastern dividers stand further east. Everything can still move: offsets
 # from here are the severity-scaled jitter.
-SCAN_SHIFT = {'M2': (0.29, 0.), 'M3': (0.70, 0.)}
-# ...and turned from the CAD (degrees, counter-clockwise): M1 leans its free
-# (north) end east.
-SCAN_YAW = {'M1': -6.}
+SCAN_SHIFT = {'M3': (0.70, 0.)}
+# ...and turned from the CAD (degrees, counter-clockwise).
+SCAN_YAW = {}
+# As rebuilt (photos/Changed_Walls.jpeg): M1, the first wall the drone goes
+# around, still pivots on the barrier but is swung 30-60 degrees from
+# north-south, its free (north) end toward the east. Its own range, not the
+# severity jitter: 45 at severity 0, the whole range at severity 1. The floor
+# tape stayed where it was taped (``guideline``).
+M1_TILT_DEG = (30., 60.)
 # The barrier's panels as scanned, from the west net (degrees, counter-clockwise):
 # the first, behind the launch, rises toward M1; the second comes back down.
 BARRIER_TILT = (6., -2., 0.)
@@ -128,6 +135,7 @@ class Wall:
     print: str = 'scifi'
     cad_pivot: np.ndarray = None  # where the CAD put the end it pivots about
     pivot: np.ndarray = None
+    tilt: float = 0.              # the part of ``yaw`` that is a rebuild, not placement error
 
 
 @dataclass
@@ -290,7 +298,12 @@ class Sampler:
             middle = (pivot + free) / 2
             nominal = np.array([math.sin(lean), -math.cos(lean)]) * np.linalg.norm(nominal)
             pivot = middle - nominal / 2
-        yaw = math.radians(SCAN_YAW.get(key, 0.) + self.u(-4, 4))
+        tilt = 0.
+        if key == 'M1':
+            lo, hi = M1_TILT_DEG
+            half = (hi - lo) / 2
+            tilt = -math.radians(lo + half + float(np.clip(self.u(-half, half), -half, half)))   # clockwise: north end east
+        yaw = tilt if key == 'M1' else math.radians(SCAN_YAW.get(key, 0.) + self.u(-4, 4))
         direction = _rot(yaw) @ (nominal / np.linalg.norm(nominal))
         if host == 'barrier' and key in BARRIER_JOINT:
             k = BARRIER_JOINT[key]
@@ -318,7 +331,7 @@ class Sampler:
         flaps = (0., 0.)                              # The vinyl wraps the ends; it does not hang past them.
         free_end = pieces[-1][1]
         wall = Wall(key, pieces, math.radians(self.u(-1, 1, False)), self.panel['height'],
-                    hole, flaps, free_end, yaw, cad_pivot=cad_pivot, pivot=pieces[0][0].copy())
+                    hole, flaps, free_end, yaw, cad_pivot=cad_pivot, pivot=pieces[0][0].copy(), tilt=tilt)
         self._dress(wall)
         if hole is not None:
             wall.gap = min(wall.gap, hole[1][0] - 0.1)       # The window's sill is panel.
@@ -336,14 +349,15 @@ def wall_meshes(wall, rng, strut=(1.05, 0.42)):
 def guideline(walls, joints):
     """The floor line, moved with the maze walls around it: each vertex
     follows the two nearest dividers (as if taped to them), weighted by
-    closeness; the barrier carries it in y."""
+    closeness; the barrier carries it in y. A wall's rebuild turn (``tilt``)
+    does not carry it: the tape stayed where it was."""
     movers = [w for w in walls if w.name in ('M1', 'M2', 'M3')]
     out = []
     for p in GUIDELINE:
         p = np.asarray(p, float)
         shifts, weights = [], []
         for w in movers:
-            moved = _rot(w.yaw) @ (p - w.cad_pivot) + w.pivot
+            moved = _rot(w.yaw - w.tilt) @ (p - w.cad_pivot) + w.pivot
             cad_free = w.cad_pivot + _rot(-w.yaw) @ (w.free_end - w.pivot)
             d = _segment_distance(p, w.cad_pivot, cad_free)
             shifts.append(moved - p)
@@ -404,9 +418,12 @@ def _lines(walls, tunnel, joints, nets):
         return points[0] - direction * extend[0], points[1] + direction * extend[1], rotation @ np.asarray(cad_normal)
     lines = {}
     # CP1: the end of the first corridor, where the floor line turns east,
-    # 0.463 m short of the north net (as in the CAD); from the west net to M1.
+    # 0.463 m short of the north net (as in the CAD); from the west net to
+    # where M1's end would be without its rebuild turn (tilted, it ends well
+    # east and south of the line).
     y = nets['north'] - CP1_FROM_NET
-    m1_x = by['M1'].free_end[0]
+    m1 = by['M1']
+    m1_x = (m1.pivot + _rot(-m1.tilt) @ (m1.free_end - m1.pivot))[0]
     lines['first_corridor'] = _line('first_corridor', (-nets['west'] - 0.3, y), (m1_x, y), (0., 1.), 1)
     s, e, n = from_free_end(by['M3'], np.array([0.305, 2.121]), [(0.305, 2.121), (0.305, 3.048)], (1., 0.), (0., 0.4))
     lines['gate_a'] = _line('gate_a', s, e, n, 2)
