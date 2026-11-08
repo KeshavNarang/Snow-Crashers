@@ -111,6 +111,7 @@ class Vehicle:
         self.last_v = np.zeros(3)
         self.yaw = yaw
         self.armed, self.landed = False, True
+        self.system_id = 3                # MAV_SYS_ID: the fleet sets it to the drone number (skybeta-03)
         self.nav_state = m.VehicleStatus.NAVIGATION_STATE_AUTO_LOITER
         self.failsafe = False
         self.battery = 1.
@@ -137,7 +138,9 @@ class Vehicle:
 
     def _command(self, message):
         accepted = False
-        if message.command == 176 and message.param2 == 6.:
+        if message.target_system not in (self.system_id, 0):
+            pass                          # PX4 ignores commands addressed to another system.
+        elif message.command == 176 and message.param2 == 6.:
             # PX4 enters Offboard only with the setpoint stream already running.
             accepted = len(self.setpoint_times) >= 5 and self.bus.ns - self.last_mode_ns < 5e8
             if accepted:
@@ -441,7 +444,7 @@ class Vehicle:
         us = self.bus.ns // 1000
         self.bus.publish('/fmu/out/vehicle_status_v1', m.VehicleStatus(
             timestamp=us, arming_state=2 if self.armed else 1, nav_state=self.nav_state,
-            failsafe=self.failsafe))
+            failsafe=self.failsafe, system_id=self.system_id, component_id=1))
         self.bus.publish('/fmu/out/vehicle_land_detected', m.VehicleLandDetected(
             timestamp=us, landed=self.landed))
         self.bus.publish('/fmu/out/battery_status', m.BatteryStatus(
