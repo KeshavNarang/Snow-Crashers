@@ -41,6 +41,14 @@ nudge_max_xy_m / nudge_max_z_m; buttons: 'land' (land here), 'hold' (pause, hove
 'resume', 'clear' (offset back to zero). Input older than remote_stale_s is ignored. No
 /overwall/remote: the mission flies as without it.
 
+MANUAL (manual: true, the team's choice 2026-11-08: no autonomy, the PS5 flies the course). The
+take-off is unchanged (WAIT, CLIMB to cruise_height_m, SETTLE), then MANUAL: the pose target moves
+with the controller (left stick forward/back/left/right along the start heading at up to
+manual_speed_mps, R2/L2 up/down at manual_climb_mps), never more than manual_leash_m ahead of the
+drone, never above the height cap or below the floor. No input / stale input: it hovers where it
+is. No controller at all for manual_no_remote_s after take-off: it lands in place. L1+Cross lands
+(the usual DESCEND/TOUCHDOWN, PX4 disarms).
+
 Heights are PX4's own estimate (local_enu in /skybeta/state), the frame PX4 steers in. The
 flight interface clamps every pose to 0.3-3.0 m above the *vision* origin (origin_enu), so
 targets are compared after that same clamp (on skybeta-03 PX4's height read 0.3-0.45 m
@@ -108,6 +116,11 @@ class Params:
         self.nudge_max_xy_m = 1.5
         self.nudge_max_z_m = 0.5
         self.remote_stale_s = 0.3        # remote input older than this is ignored (link lost)
+        self.manual = False              # True: after take-off only the PS5 flies (MANUAL)
+        self.manual_speed_mps = 0.4      # full left stick
+        self.manual_climb_mps = 0.3      # full R2 / L2
+        self.manual_leash_m = 0.5        # target never further than this from the drone
+        self.manual_no_remote_s = 15.0   # never any controller input in MANUAL: land in place
         self.repeat = True
         for key, value in overrides.items():
             if not hasattr(self, key):
@@ -153,7 +166,7 @@ class Mission:
     + 'received', or None.
     """
 
-    FLYING = ('CLIMB', 'SETTLE', 'APPROACH', 'HOLD_WALL', 'CLIMB_OVER', 'OVER', 'LOOK', 'SWEEP',
+    FLYING = ('CLIMB', 'SETTLE', 'MANUAL', 'APPROACH', 'HOLD_WALL', 'CLIMB_OVER', 'OVER', 'LOOK', 'SWEEP',
               'TO_PAD', 'ARRIVE', 'DESCEND', 'TOUCHDOWN')
 
     def __init__(self, params=None):
@@ -176,6 +189,7 @@ class Mission:
         self.paused = False
         self.remote_done = 0             # highest remote event id handled
         self.remote_was_fresh = None
+        self.remote_seen = False         # MANUAL: any controller input since entering it
         self._reset_phase_vars()
 
     def _reset_phase_vars(self):
@@ -329,6 +343,8 @@ class Mission:
             elif name == 'clear':
                 self.nudge = [0.0, 0.0, 0.0]
                 self.say('Remote: nudge cleared.')
+        if p.manual:
+            return                         # MANUAL moves the target itself; no offset
         f, l, u = (max(-1.0, min(1.0, float(v))) for v in (list(remote.get('sticks') or [0, 0, 0]) + [0, 0, 0])[:3])
         if f or l or u:
             fx, fy = self.forward
@@ -467,7 +483,10 @@ class Mission:
                 self.descend(now, here, 'Could not reach cruise height (at %.2f m): landing here.' % height)
 
         elif self.phase == 'SETTLE':
-            if t >= p.hold_s:
+            if t >= p.hold_s and p.manual:
+                self.remote_seen = False
+                self.enter('MANUAL', now, 'At %.2f m: MANUAL, the PS5 controller flies it now.' % height)
+            elif t >= p.hold_s:
                 if not depth_ok:
                     self.descend(now, here, 'No depth from stereo_depth: not approaching, landing here.')
                 else:
@@ -475,6 +494,26 @@ class Mission:
                     self.enter('APPROACH', now, 'Front %s. Approaching at %.2f m/s, stopping %.2f m from the wall.'
                                % ('%.2f m' % distance if distance is not None else 'clear',
                                   p.approach_speed_mps, p.stop_distance_m))
+
+        elif self.phase == 'MANUAL':
+            if self._fresh(remote, now, p.remote_stale_s):
+                self.remote_seen = True
+                f, l, u = (max(-1.0, min(1.0, float(v))) for v in
+                           (list(remote.get('sticks') or [0, 0, 0]) + [0, 0, 0])[:3])
+                fx, fy = self.forward
+                x = self.target[0] + p.manual_speed_mps * dt * (f * fx - l * fy)
+                y = self.target[1] + p.manual_speed_mps * dt * (f * fy + l * fx)
+                z = self.target[2] + p.manual_climb_mps * dt * u
+                dx, dy, dz = x - here[0], y - here[1], z - here[2]
+                d = math.sqrt(dx * dx + dy * dy + dz * dz)
+                if d > p.manual_leash_m:          # never run away from the drone
+                    k = p.manual_leash_m / d
+                    x, y, z = here[0] + dx * k, here[1] + dy * k, here[2] + dz * k
+                z = min(top_z, max(self.start[2] + p.floor_m, z))
+                self.target = (x, y, z)
+            elif not self.remote_seen and t > p.manual_no_remote_s:
+                self.descend(now, here, 'No controller input in %.0f s of MANUAL: landing here.'
+                             % p.manual_no_remote_s)
 
         elif self.phase == 'APPROACH':
             if not depth_ok:
