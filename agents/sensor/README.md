@@ -1,5 +1,7 @@
 # Auxiliary sensor workstream
 
+> Current requirement: real RGB is mandatory for pad finding; enabling the existing OAK-D colour sensor is competition-permitted, confirmed by the user. Do not fake RGB-sensor values. The candidate/rule discussion below is historical; see [current camera guidance](../../docs/CAMERAS.md).
+
 Status (2026-11-08): leading idea = a small downward COLOUR camera so the pad detector can see the mat.
 Criteria were written first: `agents/sensor/CRITERIA.md`. Candidate scoring below; nothing bought or
 installed. Update this file as decisions are made.
@@ -22,7 +24,7 @@ may include packaging), NOT verified. Every UNKNOWN must be checked before buyin
 
 | Candidate | C1 price <$100 | C2 <50 g | C3 colour | C4/C5 Jetson+ROS | C8 FOV | C9 shutter | Verdict |
 |---|---|---|---|---|---|---|---|
-| **Option 0: the OAK-D S2's own colour sensor** (12 MP IMX378, already on the drone) | free | 0 g | yes | needs the driver pipeline changed in `~/skybeta/.../oakd_vslam.yaml` (organizer-owned) | wide | rolling | **Ask the organizers first.** No hardware, no mass; blocked by rules/config only |
+| **Option 0: the OAK-D S2's own colour sensor** (12 MP IMX378, already on the drone) | free | 0 g | yes | needs the driver pipeline changed in `~/skybeta/.../oakd_vslam.yaml` (organizer-owned) | wide | rolling | **Allowed and required for the pad mission.** No added hardware/mass; enable and verify real RGB. Performance/configuration work remains, not competition permission. |
 | **Arducam OV9782 USB UVC colour global shutter, 1 MP 1280x800 (B0385)** | UNKNOWN: AU$96.95 incl. GST at one retailer (about US$55-60?), no US price found | UNKNOWN: ~50 g listed as item weight (may include packaging); weigh it | yes | UVC: works with stock Linux; v4l2_camera/usb_cam | UNKNOWN: depends on lens variant, pick a wide one | global | **Best candidate.** Verify US price, weigh the bare module, lens FOV |
 | Arducam IMX219 wide angle, CSI, Orin Nano version (JetPack 6.2 supported) | $26.99 listed | 15 g listed (an older SKU says 8 g); board 25x24 mm | yes | CSI, supported on JetPack 6.2; cable must be the 22-to-15 pin type for Orin Nano | 160-175 deg fisheye: needs calibration | rolling (blur at speed) | **Backup.** Cheapest and lightest; needs a reachable CSI connector and a ribbon routed on the frame |
 | Arducam AR0234 colour global shutter, CSI | $109.99 | UNKNOWN | yes | CSI, Orin supported | - | global | **FAIL C1** (over $100) |
