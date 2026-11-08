@@ -71,3 +71,26 @@ Read with a0fa7cb (depth-bottleneck log, same evening): once warmed up (~5 min) 
 the cameras ~28 Hz; overwall's stereo_depth is bound by its single Python thread (receive + sync of ~28
 pairs/s + match), topping out at 3.4-4 Hz. goalnav's stereo_node has the same structure, so expect <= ~4 Hz
 depth on the drone (the simulator assumes 4.5). A threaded or C++ node, or on-camera depth, would lift both.
+
+## Third session: colour camera, on-camera depth, goalnav deployed (18:44-19:10, props off, lock taken)
+Stack stopped for the camera tests (camera free), then restarted. Scripts and results in
+`agents/logs/colourtest-20261107-184424/` (also in ~/team_ws/logs/ and ~/team_ws/tools/ on the drone).
+
+- **Colour camera:** depthai reports CAM_A = IMX378 COLOR, CAM_B/C = OV9282. Factory calibration: colour 3.78 cm
+  from the left camera, 3.76 cm from the right (centred). Frames saved (`colour_*.png`): sharp, a bit dark.
+- **It does not slow the pair:** pair alone 29.8/29.8 Hz; + colour 640x400@30: 29.5/29.5 + 29.5 Hz;
+  + colour 1280x720@15: 29.5/29.5 + 14.9 Hz.
+- **On-camera depth** (StereoDepth, DEFAULT preset) + colour 640x400@15: depth 640x400@30 -> 29.4 Hz (21 % valid on
+  the bench scene); 1024x640 -> 21.5 Hz; 1280x800 -> 15.9 Hz. CPU stereo on the Jetson: 2.8-4.0 Hz.
+- Both need the stack's camera pipeline changed: `oakd_vslam.yaml` is in the organizers' image and ~/skybeta
+  checkout (README: leave tracked files as they are), and the launch takes no config override. Organizer decision.
+
+goalnav deployed to ~/team_ws/src/drone_ref, drone.env set to drone_ref/goalnav.launch.py, stack restarted (built
+fine, PX4 link came back on its own), then **restored to overwall_nav**:
+- logger: `~/team_ws/logs/<UTC date-time>/` with bag/ (MCAP, split at 2 GB), ros/, run.json; ~35 MB/s (12 GB
+  in ~6 min). Files owned by root (container).
+- goalnav stereo_node single-threaded: 2.8 Hz, age 281 ms; with receive and match apart (2 worker threads):
+  **4.0 Hz, age 234 ms**, CPU 43 % of 6 cores, cuVSLAM 28.7 Hz. The input image_mono reaches Python at ~21 Hz and
+  120-370 ms old already: the remaining limit.
+- After the last restart (back to overwall_nav) the FC link did NOT come back (px4_link false, agent no
+  datawriters): needs a Pixhawk power cycle. cuVSLAM odom read (-11.6, -1.4) on a still drone.
