@@ -1,5 +1,7 @@
 # Local simulator
 
+> **Historical former-race-stack guide.** Several referenced modules/configs are absent from this checkout. For the current goal navigator use [docs/SIMULATION.md](../../docs/SIMULATION.md) and `localsim.goalrun`. The timing tables and SITL results below belong to the old implementation.
+
 A portable simulator of the real drone, so changes can be tested in about a
 minute without lab credit. It runs our **real** `mission_node` and
 `vision_node` code with `config/sim.yaml` plus the `config/race.yaml` overlay

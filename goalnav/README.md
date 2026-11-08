@@ -1,5 +1,7 @@
 # goalnav: the Sky Beta's course navigator and its simulator
 
+> Start at the [central docs index](../docs/README.md), especially [status](../docs/STATUS.md), [cameras](../docs/CAMERAS.md) and [simulation](../docs/SIMULATION.md). This package README describes the CPU-stereo implementation in this checkout; the newer on-camera-depth adapter is tracked separately.
+
 Moved here from the old prep repo (`SnowCrashers Prep/reference_stack`); only
 the goal navigator, its simulator and what they need came along (the old
 CAD-replay race stack did not). ROS 2 package name: `drone_ref`.
@@ -61,12 +63,9 @@ video is ~40 MB/s, ~7 GB for a 3-minute run (164 GB free on skybeta-03).
 Pull a run with `tools/drone pull team_ws/logs/<date-time> .`; replay it with
 `ros2 bag play`.
 
-**Not on the drone yet:** the pad. The stack runs no colour camera, and in
-brightness alone the blue mat is within ~10 % of the orange floor, so the
-colour detector has nothing to work with (`pad_image_topic` is empty). Until
-the organizers enable the colour camera or a mono detector is built from real
-images of the mat, the mission flies to its lookouts and aborts there
-(descends where it is).
+**Real RGB is required for pad finding, and enabling it is competition-permitted (user confirmation). Never fake RGB-sensor values.**
+
+**Pad input needs wiring and verification.** The drone has a tested IMX378 colour camera. Whether its pipeline publishes colour and this adapter subscribes to it is configuration-dependent (`pad_image_topic` is empty by default here). Without usable colour the existing colour detector cannot find the mat, and the mission eventually aborts/descends. Camera-pipeline changes have organizer approval; see [camera status](../docs/CAMERAS.md).
 
 `stop_after: <goal id>` ends a staged test there: straight down until PX4
 disarms it (`COM_DISARM_LAND`). Goal
@@ -98,5 +97,4 @@ cuVSLAM stay at 30 Hz while the stereo node and the recorder run.
   meets the barrier.
 - **Holds:** takeoff, descents and any stop are twists carrying a position
   correction (the interface takes a pose or a twist, never both).
-- **Not yet run on the drone:** the node's ROS wiring, the takeover through
-  `flight_interface`, the Orin's compute (7 ms per depth frame on a laptop).
+- **Deployment evidence:** the older CPU-stereo goalnav stack built and ran props-off on the drone, including logging and stereo. This does not establish a goalnav flight or validation of the newer depth-image adapter. The simple up/forward/land mission has flown successfully; see [status](../docs/STATUS.md).

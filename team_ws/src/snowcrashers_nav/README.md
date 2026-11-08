@@ -1,5 +1,8 @@
 # snowcrashers_nav: up 2 m, forward 2 m, land (real skybeta drone)
 
+**Flight status (user report, 2026-11-07): several real simple up-and-move tests succeeded.**
+Current [flight guide](../../../docs/FLIGHT.md) and [project status](../../../docs/STATUS.md).
+
 A team package for the skybeta drones (Jetson Orin Nano + Pixhawk 6C, PX4 1.16), written
 against what is actually on **skybeta-03** (skybeta 0.3.3, read 2026-11-07), not against
 the simulator. It lives on the drone in `~/team_ws/src/snowcrashers_nav`.
@@ -21,7 +24,7 @@ our node --/skybeta/setpoint/{pose,twist}--> flight_interface --/fmu/in/*--> PX4
   the only thing allowed to talk to PX4 (rules: never publish `/fmu/in/*`). It streams the
   Offboard heartbeat at 10 Hz, converts ENU to NED, floors every pose at 0.3 m and caps twists
   at 1.5 m/s.
-- **Nothing on the Jetson can arm.** The safety pilot arms on RC **with the mode switch on
+- **The supplied flight interface has no arm service.** The safety pilot arms on RC **with the mode switch on
   Altitude**, then **switches to Position, on the ground**. That switch is the go signal: if
   our node has published a setpoint in the last second, PX4 has a valid position and it is
   landed, the interface asks PX4 for Offboard, once per arming (since 0.3.3 addressed to the
@@ -54,11 +57,7 @@ needed or wanted: the organisers ask everyone to keep the fleet defaults.
 1. Code: `~/team_ws/src/snowcrashers_nav` (this folder). The stack builds it.
 2. `sudo nano /etc/skybeta/drone.env` and set only these two lines:
    `COMPETITOR_PKG=snowcrashers_nav` and `COMPETITOR_LAUNCH=competitor.launch.py`.
-3. The stack must be running. **On skybeta-03 it is not set to start at boot**
-   (`host/doctor.sh`: `stack-autostart not installed`). Either start it by hand each power-up
-   (`cd ~/skybeta && host/run.sh stack`, needs an interactive terminal) or install the boot
-   service: `cd ~/skybeta && sudo host/autostart.sh enable` (what the organisers' test needs:
-   "your code starts by itself, with nobody logged in").
+3. The stack must be running. Later sessions record autostart enabled; inspect the current service instead of assuming the initial “not installed” state still holds. `run_mission.sh` selects a mission but does not enable the service. Installing/enabling it with `host/autostart.sh enable` is a separate action that starts/restarts the stack; see the [flight guide](../../../docs/FLIGHT.md).
 4. `host/doctor.sh` must show `uart-traffic PASS`. FAIL = no bytes from the flight controller:
    it is unpowered, the cable is not seated, or (on stock v1.16.2 firmware) the link wedged
    after an earlier stack stop and only an FC power cycle clears it.
@@ -79,5 +78,4 @@ If the drone stays in Position instead, the `flight_interface` log says why:
 
 **Props off first.** Rehearse the whole sequence props-off: arm in Altitude, switch to
 Position, and check `[CLIMB] Offboard active` appears (then disarm). Then low and tethered
-(`height_m:=0.5 forward_m:=0.5`), then the full mission. A VIO hover has not been flown on
-any skybeta airframe yet (organisers' README), so your first flights are the test.
+(`height_m:=0.5 forward_m:=0.5`), then the full mission. The team has already completed several simple real-flight tests; this rehearsal is for changes to the mission/configuration, not a claim that the platform has never flown.
