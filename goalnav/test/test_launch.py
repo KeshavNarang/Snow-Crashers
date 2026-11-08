@@ -59,17 +59,27 @@ class LaunchLikeOverwall(unittest.TestCase):
             self.assertEqual(_keyword_source(goal, key, self.goal_src), _keyword_source(wall, key, self.wall_src), key)
         self.assertNotIn('condition', [k.arg for k in goal.keywords], 'always started, as in overwall')
 
-    def test_depth_from_the_mono_pair_on_the_jetson(self):
-        """skybeta-03, 2026-11-07 23:49: with on-camera depth (rgbd) vision reached PX4 665 ms old
-        (timestamp - timestamp_sample), estimator cs_ev_pos false, xy_valid false: no position.
-        The RGBSTEREO image fuses, so depth comes from goalnav's stereo_node on the Jetson."""
+    def test_camera_modes_default_rgbstereo(self):
+        """The team camera config (team_ws/camera/oakd_vslam.yaml) runs RGBSTEREO: colour + the mono
+        pair, NO on-camera depth (RGBD cost PX4 its VIO fusion on skybeta-03; team_ws/preflight.sh).
+        So by default goalnav must make its own depth from the pair (stereo_node) and find the pad
+        in colour; 'rgbd' keeps the on-camera depth image."""
         calls = _node_calls(self.goal)
         self.assertIn('goalnav_node', calls)
-        self.assertIn('stereo_node', calls)
-        self.assertNotIn('stereo_depth', calls)       # not overwall's CPU stereo as well
-        defaults = {name: default for name, default, _ in _assigned(self.goal, 'GOALNAV')}
-        self.assertEqual(defaults.get('points_topic'), '/goalnav/stereo/points')
-        self.assertEqual(defaults.get('depth_topic'), '')    # the image has no on-camera depth
+        self.assertIn('stereo_node', calls)                  # started in rgbstereo mode
+        self.assertNotIn('stereo_depth', calls)              # never overwall's CPU stereo too
+        modes = _assigned(self.goal, 'CAMERA_MODES')
+        self.assertIsNotNone(modes, 'goalnav.launch.py has no CAMERA_MODES table')
+        rgbstereo, rgbd = modes['rgbstereo'], modes['rgbd']
+        self.assertTrue(rgbstereo['stereo_node'])
+        self.assertEqual(rgbstereo['goalnav']['depth_topic'], '')
+        self.assertEqual(rgbstereo['goalnav']['points_topic'], '/goalnav/stereo/points')
+        self.assertEqual(rgbstereo['goalnav']['pad_image_topic'], '/oak/rgb/image_raw')
+        self.assertEqual(rgbstereo['goalnav']['pad_info_topic'], '/oak/rgb/camera_info')
+        self.assertFalse(rgbd['stereo_node'])
+        self.assertEqual(rgbd['goalnav']['depth_topic'], '/oak/stereo/image_raw')
+        camera = [d for d in _assigned(self.goal, 'GOALNAV') if d[0] == 'camera']
+        self.assertEqual(camera and camera[0][1], 'rgbstereo')
 
     def test_entry_is_generate_launch_description(self):
         names = [n.name for n in self.goal.body if isinstance(n, ast.FunctionDef)]

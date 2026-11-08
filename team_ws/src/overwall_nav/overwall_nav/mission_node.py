@@ -4,12 +4,14 @@
     subscribe  /visual_slam/tracking/odometry  heading at the start
     subscribe  /overwall/front                 JSON from stereo_depth
     subscribe  /overwall/pad                   JSON from pad_detect (optional: without it, no pad search)
+    subscribe  /overwall/remote                JSON from remote_link (PS5 via the laptop; optional)
     publish    /skybeta/setpoint/pose, /skybeta/setpoint/twist
 
 Never /fmu/in/*, never arms, never changes mode.
 """
 import json
 import math
+import os
 
 import rclpy
 from rclpy.executors import ExternalShutdownException
@@ -33,13 +35,14 @@ class OverWallNode(Node):
         for name in names:
             self.declare_parameter(name, getattr(defaults, name))
         self.mission = Mission(Params(**{n: self.get_parameter(n).value for n in names}))
-        self.state = self.odom = self.front = self.pad = None
+        self.state = self.odom = self.front = self.pad = self.remote = None
         self.pose_pub = self.create_publisher(PoseStamped, '/skybeta/setpoint/pose', 10)
         self.twist_pub = self.create_publisher(TwistStamped, '/skybeta/setpoint/twist', 10)
         self.create_subscription(String, '/skybeta/state', self.state_cb, 10)
         self.create_subscription(Odometry, '/visual_slam/tracking/odometry', self.odom_cb, 10)
         self.create_subscription(String, '/overwall/front', self.front_cb, 10)
         self.create_subscription(String, '/overwall/pad', self.pad_cb, 10)
+        self.create_subscription(String, '/overwall/remote', self.remote_cb, 10)
         # PX4's heading, read only (as flight_interface does): the heading the mission holds.
         try:        # the same topic flight_interface resolves for this px4_msgs generation
             from skybeta_flight_interface.topics import resolve_endpoints
@@ -51,6 +54,9 @@ class OverWallNode(Node):
                              history=HistoryPolicy.KEEP_LAST, depth=5)
         self.px4_heading = None
         self.create_subscription(VehicleLocalPosition, topic, self.local_position_cb, px4_qos)
+        # Our own line-by-line log, fsynced: ROS's log files and the bag were lost at a power-off.
+        run_dir = os.environ.get('ROS_LOG_DIR')
+        self.logfile = open(os.path.join(run_dir, 'mission.log'), 'a') if run_dir else None
         self.create_timer(0.1, self.tick)
         p = self.mission.p
         wall = f'wall {p.wall_height_m:.2f} m tall' if p.wall_height_m > 0 else 'wall height from depth'
@@ -96,14 +102,26 @@ class OverWallNode(Node):
         pad['received'] = self.now_s()
         self.pad = pad
 
+    def remote_cb(self, msg):
+        try:
+            remote = json.loads(msg.data)
+        except ValueError:
+            return
+        remote['received'] = self.now_s()
+        self.remote = remote
+
     def tick(self):
         now = self.now_s()
         if self.odom is not None:
             fresh = self.px4_heading is not None and now - self.px4_heading[1] < 1.0
             self.odom['px4_yaw'] = yaw_enu_from_ned(self.px4_heading[0]) if fresh else None
-        command = self.mission.step(now, self.state, self.odom, self.front, self.pad)
+        command = self.mission.step(now, self.state, self.odom, self.front, self.pad, self.remote)
         for line in self.mission.log:
             self.get_logger().info(f'[{self.mission.phase}] {line}')
+            if self.logfile:
+                self.logfile.write(f'{now:.2f} [{self.mission.phase}] {line}\n')
+                self.logfile.flush()
+                os.fsync(self.logfile.fileno())
         self.mission.log.clear()
         if command is None:
             return

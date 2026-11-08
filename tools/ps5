@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# PS5 (DualSense) controller -> skybeta-03's overwall mission (nudge + buttons). Rules now allow
+# remote input. The mission keeps flying; the controller only nudges it and presses buttons.
+#
+#   tools/ps5            pair the controller with this laptop first (Bluetooth or USB-C)
+#   tools/ps5 --dry      no drone: print what would be sent (check the buttons)
+#
+# Hold L1 to nudge: left stick = forward/back/left/right, right stick up/down = height (0.25 m/s,
+# at most 1.5 m sideways, 0.5 m up/down). L1 + Cross = land here. Circle = hold (hover).
+# Triangle = resume. Square = clear the nudge. The RC transmitter's kill switch still rules.
+# First run creates .venv-ps5/ in the repo (gitignored) with pygame; nothing else to install.
+set -euo pipefail
+root="$(cd "$(dirname "$0")/.." && pwd)"
+venv="$root/.venv-ps5"
+if [[ ! -x "$venv/bin/python" ]]; then
+  base=$(command -v /opt/homebrew/bin/python3 || command -v /usr/local/bin/python3 || command -v python3)
+  echo "first run: making $venv with pygame (needs internet, ~1 min)"
+  "$base" -m venv "$venv" && "$venv/bin/pip" -q install pygame
+fi
+py="$venv/bin/python"
+if [[ "${1:-}" == --dry ]]; then exec "$py" "$root/tools/drone_tools/ps5_remote.py" --dry; fi
+port=47000
+"$root/tools/drone" tunnel $port $port &
+tunnel=$!
+trap 'kill $tunnel 2>/dev/null || true' EXIT
+for _ in $(seq 1 40); do (exec 3<>/dev/tcp/127.0.0.1/$port) 2>/dev/null && break; sleep 0.25; done
+"$py" "$root/tools/drone_tools/ps5_remote.py" --port $port

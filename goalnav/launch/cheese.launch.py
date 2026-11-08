@@ -16,8 +16,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 ARGS = {
     'goals_file': 'config/cheese_goals.yaml',
-    'image_topic': '/oak/rgb/image_raw',
-    'image_info_topic': '/oak/rgb/camera_info',
+    'camera': 'rgbstereo',          # colour pad + stereo_node depth (goalnav.launch.py CAMERA_MODES)
     'profile': 'safe',
     'tuning': '{cruise_height: 2.25, handover_height: 2.15, return_enabled: false, '
               'pad_disarm: true, heading_until: over_barrier}',

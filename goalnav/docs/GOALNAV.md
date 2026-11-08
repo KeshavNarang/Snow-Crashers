@@ -237,8 +237,8 @@ Where it fails:
 
 ## Limits
 
-- The pad detector is the real one (`pad_detect.py`) on rendered colour, so
-  only with `--assume-colour-pad`.
+- The pad detector is the real one (`pad_detect.py`) on rendered colour: always with
+  `--camera rgbstereo` (the default, as the drone's team camera config), or `--camera rgbd --colour`.
 - There is no stereo image and no cuVSLAM: VIO is the vehicle model's
   drifting estimate.
 - The PX4 model is the Python one, not SITL. Between goalnav and it runs

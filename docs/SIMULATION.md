@@ -12,10 +12,11 @@ camera frames. Keep the adjacent `cam/` directory with the viewer.
 
 ## Match the branch
 
-- The current main adapter/simulator models CPU stereo points; use
-  `--assume-colour-pad` to supply simulated colour to its pad detector.
-- `agent/goalnav-oak-depth` changes the contract to depth Images and uses
-  `--colour` instead. Its handoff records no simulation after those changes.
+- `localsim.goalrun --camera rgbstereo` (the default) models the drone's team camera config:
+  goalnav's CPU stereo points from the mono pair (~4.5 Hz, ~0.13 s old) and colour for the pad,
+  as `goalnav.launch.py camera:=rgbstereo` runs on the drone.
+- `--camera rgbd` models the on-camera depth Image instead (10 Hz, 0.1 s; add `--colour` for the
+  pad). That camera config cost PX4 its VIO fusion on skybeta-03, so it is not what flies.
 - `origin/agent/sim-walls` contains rebuilt-maze/ladder geometry. The older
   scan layout includes walls that have since moved or been removed. Even the
   rebuilt version retains unresolved floor-tape/checkpoint placement.

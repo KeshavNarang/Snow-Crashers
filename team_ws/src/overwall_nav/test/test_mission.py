@@ -67,7 +67,9 @@ class World:
                  background_at=3.0, yaw_deg=20.0, start=(0.3, -0.2, 0.0), arm_at=4.0, switch_at=6.0,
                  takeover_at=None, depth=True, depth_dropout=None, local_offset_z=0.0, vio_tilt_deg=0.0,
                  spurious=60, params=None, seed=1, floor_fit=None, wall_bottom=0.0, crossbar=None,
-                 pad=None, pad_feed=None):
+                 pad=None, pad_feed=None, remote=None):
+        self.remote_fn = remote                 # operator: f(t, phase, world) -> controller message or None
+        self.remote_msg = None
         self.pad = pad                          # (along, left, yaw_deg) of the mat from the start, or None
         self.pad_feed = pad is not None if pad_feed is None else pad_feed   # pad_detect running
         self.pad_msg = None
@@ -295,9 +297,14 @@ class World:
             if self.pad_feed and i % 10 == 5:                 # 5 Hz, 0.1 s old
                 self.pad_msg = dict(self.pad_view(self.history[-5] if len(self.history) >= 5 else self.p),
                                     received=self.t)
+            if self.remote_fn and i % 5 == 2:                 # 10 Hz from the laptop
+                msg = self.remote_fn(self.t, self.mission.phase, self)
+                if msg is not None:
+                    self.remote_msg = dict(msg, received=msg.get('received', self.t))
             if i % 5 == 0:
                 phase = self.mission.phase
-                self.take(self.mission.step(self.t, self.state, self.odom, self.front, self.pad_msg))
+                self.take(self.mission.step(self.t, self.state, self.odom, self.front, self.pad_msg,
+                                            self.remote_msg))
                 if self.mission.phase in self.mission.FLYING:
                     self.held.append(self.mission.hold_yaw)
                 for line in self.mission.log:
@@ -521,6 +528,76 @@ class OverWallTest(unittest.TestCase):
         self.assertIn('not seen', w.log())
         self.assertAlmostEqual(w.along(), 0.686 + 1.880, delta=0.2, msg=w.log())
         self.assertAlmostEqual(w.heading, w.yaw, delta=math.radians(3), msg=w.log())
+
+    # -- the PS5 controller (rules now allow remote input): nudge + buttons, mission keeps flying --
+    def left_of_start(self, w):
+        return (w.p[1] - w.origin[1]) * w.f[0] - (w.p[0] - w.origin[0]) * w.f[1]
+
+    def test_remote_nudge_puts_it_on_the_real_pad(self):
+        # Seen 2026-11-07: a blue ladder beside the pad was taken for it. Here the detector's pad
+        # IS the ladder (0.6 m right of the real mat); the operator holds L1 + left stick for
+        # 2.4 s over it (0.25 m/s) and the drone lands on the real mat instead.
+        ladder, real = (0.686 + 1.88, -0.3), (0.686 + 1.88, 0.3)
+        held = {}
+
+        def operator(t, phase, w):
+            if phase == 'ARRIVE' and 'from' not in held:
+                held['from'] = t
+            on = 'from' in held and t - held['from'] < 2.4
+            return {'sticks': [0.0, 1.0 if on else 0.0, 0.0], 'events': []}
+        w = World(**self.COURSE_WALL, pad=(ladder[0], ladder[1], 0.0), remote=operator, params=self.COURSE).run(140.0)
+        self.assertLandedBeyond(w)
+        self.assertAlmostEqual(self.left_of_start(w), real[1], delta=0.15, msg=w.log())
+        self.assertAlmostEqual(w.along(), real[0], delta=0.15, msg=w.log())
+
+    def test_remote_land_here_at_the_wall(self):
+        # L1 + cross while it creeps at the wall: it lands where it is, in front of the wall.
+        def operator(t, phase, w):
+            return {'sticks': [0.0, 0.0, 0.0], 'events': [[1, 'land']] if phase == 'HOLD_WALL' else []}
+        w = World(wall_at=1.2, wall_height=1.6, wall_bottom=0.3, remote=operator).run(80.0)
+        self.assertEqual(w.contacts, 0, w.log())
+        self.assertFalse(w.armed, w.log())
+        self.assertLess(w.along() + CAM_FORWARD, 1.2, w.log())
+        self.assertIn('Land here', w.log())
+        self.assertNotIn('[CLIMB_OVER]', w.log())
+
+    def test_remote_hold_then_resume(self):
+        # Circle in OVER pauses it in place for 5 s; triangle resumes; it finishes as without.
+        mark = {}
+
+        def operator(t, phase, w):
+            if phase == 'OVER' and 'hold' not in mark:
+                mark['hold'], mark['along'] = t, w.along()
+            ev = []
+            if 'hold' in mark:
+                ev.append([1, 'hold'])
+                if t - mark['hold'] > 5.0:
+                    ev.append([2, 'resume'])
+                elif t - mark['hold'] > 1.0:
+                    mark['drift'] = max(mark.get('drift', 0.0), abs(w.along() - mark['along2']) if 'along2' in mark else 0.0)
+                    mark.setdefault('along2', w.along())
+            return {'sticks': [0.0, 0.0, 0.0], 'events': ev}
+        w = World(**self.COURSE_WALL, remote=operator, params=self.COURSE).run(140.0)
+        self.assertLandedBeyond(w)
+        self.assertLess(mark.get('drift', 9.0), 0.05, w.log())                       # held still
+        self.assertAlmostEqual(w.along(), 0.686 + 1.880, delta=0.2, msg=w.log())     # then as usual
+
+    def test_stale_remote_is_ignored(self):
+        # The laptop's last message (stick hard left) is 1 s old: the link died. No nudge.
+        def operator(t, phase, w):
+            return {'sticks': [0.0, 1.0, 0.0], 'events': [], 'received': max(0.0, t - 1.0)}
+        w = World(**self.COURSE_WALL, remote=operator, params=self.COURSE).run(120.0)
+        self.assertLandedBeyond(w)
+        self.assertAlmostEqual(self.left_of_start(w), 0.0, delta=0.1, msg=w.log())
+
+    def test_remote_nudge_is_capped(self):
+        # Stick held left the whole flight: the offset stops at nudge_max_xy_m (1.5 m).
+        def operator(t, phase, w):
+            return {'sticks': [0.0, 1.0, 0.0], 'events': []}
+        w = World(**self.COURSE_WALL, remote=operator, params=self.COURSE).run(120.0)
+        self.assertFalse(w.armed, w.log())
+        self.assertLess(self.left_of_start(w), 1.5 + 0.15, w.log())
+        self.assertGreater(self.left_of_start(w), 1.2, w.log())
 
     def test_param_guards(self):
         with self.assertRaises(ValueError):
