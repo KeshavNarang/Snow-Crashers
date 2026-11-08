@@ -152,6 +152,10 @@ the hostname does not resolve, say so; do not guess other hosts.
   session can pick up.
 - Simulate first: `goalnav/localsim` (see `goalnav/README.md`). Run `python3 -m pytest` where
   tests exist before pushing.
+- **Sims: one at a time, one run per command. No long-running loops or parallel batches** (user
+  rule, 2026-11-07). Look at each result before starting the next; fix failures one by one.
+  Put every run under one flat output folder with one index page (`localsim/live_index.py`),
+  not separate pages per batch.
 
 ## Drone lock etiquette
 `tools/drone-lock status` before anything beyond a read-only look. If another agent holds the lock, don't
