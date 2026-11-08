@@ -38,7 +38,7 @@ LOG_ROOT = '/root/team_ws/logs/overwall'
 # Small topics only (~30 kB/s): what the mission saw, decided and commanded. PX4's view (armed, mode,
 # landed, local position) is in /skybeta/state: on skybeta-03 `ros2 bag record` never discovered the
 # /fmu/out/* topics (tried with best-effort QoS overrides too), so they are not listed here.
-BAG_TOPICS = ['/overwall/front', '/overwall/pad', '/skybeta/state', '/skybeta/setpoint/pose',
+BAG_TOPICS = ['/overwall/front', '/overwall/pad', '/overwall/remote', '/skybeta/state', '/skybeta/setpoint/pose',
               '/skybeta/setpoint/twist', '/visual_slam/tracking/odometry', '/rosout']
 
 
@@ -64,6 +64,8 @@ def generate_launch_description():
                  output='screen', emulate_tty=True, parameters=[settings])
     pad = Node(package='overwall_nav', executable='pad_detect', name='pad_detect',
                output='screen', emulate_tty=True, parameters=[settings])
+    remote = Node(package='overwall_nav', executable='remote_link', name='remote_link',
+                  output='screen', emulate_tty=True, parameters=[settings])
     mission = Node(package='overwall_nav', executable='overwall_mission', name='overwall_mission',
                    output='screen', emulate_tty=True, parameters=[settings])
-    return LaunchDescription(declared + logging + [flight_interface, depth, pad, mission])
+    return LaunchDescription(declared + logging + [flight_interface, depth, pad, remote, mission])
