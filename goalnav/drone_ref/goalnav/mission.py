@@ -16,9 +16,7 @@ ON_PAD (touched down armed, CP5; lifts off again within ``pad_rest_s``,
 before PX4 disarms it, or stays down with ``pad_disarm``) -> RETURN (one
 move: climbing off the pad, over the barrier, down toward the mark) ->
 RETURN_DESCEND (down onto it, then down until PX4 disarms) -> DONE.
-Giving up mid-course (no progress, the pad not seen) flies home on the
-return; ABORTED (the estimate invalid, or no time left) descends where it
-is until PX4 disarms.
+ABORTED descends where it is until PX4 disarms.
 """
 from dataclasses import dataclass, field
 import math
@@ -565,8 +563,7 @@ class GoalMission:
             return None
         if not telemetry.armed:
             # PX4 disarmed it: on the floor after COM_DISARM_LAND, or killed.
-            home = 'returned to the launch' + (f' (gave up: {self.gave_up})' if getattr(self, 'gave_up', None) else '')
-            reason = {'ON_PAD': 'disarmed on the pad', 'RETURN_DESCEND': home}.get(
+            reason = {'ON_PAD': 'disarmed on the pad', 'RETURN_DESCEND': 'returned to the launch'}.get(
                 state, 'disarmed' if state == 'ABORTED' else f'disarmed in {state}')
             self._enter('DONE', now, reason)
             return None
@@ -581,24 +578,11 @@ class GoalMission:
             return self._abort(now, 'time limit')
         return getattr(self, '_' + state.lower())(telemetry, dt)
 
-    def _abort(self, now, reason, home_s=30.):
-        """Give up. Fly home on the return (high over everything mapped, unseen
-        space as tall as a wall, down onto the launch spot, which is known
-        clear) when it can: descending blind where it is can land on a rock or
-        a stand's foot the camera cannot see below it. Straight down where it
-        is only when it cannot navigate (estimate invalid) or there is not
-        ``home_s`` left (there is no PX4 Land to ask for)."""
-        t = self.telemetry
-        flyable = t.valid and self.route is not None and self.state not in ('TAKEOFF', 'RETURN', 'RETURN_DESCEND')
-        if flyable and self.started is not None and now - self.started < self.cfg.time_limit - home_s:
-            self.gave_up = reason
-            self.status.events.append((round(now, 3), 'gave up', reason))
-            self._enter('RETURN', now, f'gave up: {reason}')
-            self.return_from = None
-            return self._return(t, self.dt_last)
+    def _abort(self, now, reason):
+        """Give up: straight down where it is (there is no PX4 Land to ask for)."""
         self._enter('ABORTED', now, reason)
-        self.abort_xy = t.position[:2].copy()
-        return self._aborted(t, self.dt_last)
+        self.abort_xy = self.telemetry.position[:2].copy()
+        return self._aborted(self.telemetry, self.dt_last)
 
     def _aborted(self, t, dt):
         """Descending where it gave up, then pressing down until PX4 disarms."""
