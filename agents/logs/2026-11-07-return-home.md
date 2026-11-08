@@ -35,3 +35,36 @@ the pad; see 2026-11-07-sim-clearance.md).
 2. Log where each return scrape happens (state, height, which wall) in `localsim.batch`.
 3. The launch mark has only 0.05-0.12 m of best-case clearance at 1.15 m (sim-clearance log): the
    descent itself, not the cruise, is where margins can't be met.
+
+## Follow-up: which part hurt, and the real cause (same 16 seeds and flags)
+
+Run in this worktree only: outputs in its git-ignored localsim/out, at most 6 runs at a time (another
+session had 20 sims running), no change to goals.yaml (the planner terminal's file).
+
+| Setting | Finish | Home mean / max s | Return scrapes |
+|---|---|---|---|
+| as flies (all off) | 11/16 | 77.9 / 86.9 | 3 (s3, s8, s15) |
+| gate only | 11/16 | 80.1 / 89.3 | 3, the same |
+| **freeze only** | 11/16 | 77.9 / 87.0 | **8** |
+| spot only | 11/16 | 77.4 / 86.6 | 3, the same |
+| margins only | 11/16 | 78.0 / 87.0 | 3, the same |
+| all on (return_guard) | 11/16 | 79.5 / 88.6 | 6 |
+| **goals copy: return_walls barrier only** | 11/16 | 78.4 / 87.9 | **2 (s8 -0.027, s15 -0.002 m)** |
+
+- **Freeze is the harmful part.** Freezing the touchdown spot below the wall tops cuts off
+  ReturnSpot's drift correction during the descent, the correction that keeps the drone off the walls.
+  Drop it. Gate, spot and margins change nothing measurable here; gate costs ~2 s.
+- **Every return scrape is in RETURN_DESCEND**, never over the barrier, 0.14-0.38 m east of the
+  mark (x -2.14..-2.38), toward where M1 meets the barrier.
+- **Cause: `goals.yaml` `return_walls` still has M1's old face** ([[-1.98, 0.65], [-1.88, 1.65]],
+  near north-south). As rebuilt, M1 runs diagonally from the barrier junction ((-2.02, 0.48) to
+  (-0.72, 1.38), and its swing varies 30-60 deg), so ReturnSpot fits points of the new M1 to the old
+  line and shifts the spot up to 0.3 m toward the corner.
+- **Fix tested (not applied):** return_walls with only the barrier entry. Scrapes 3 -> 2 and far
+  shallower (worst -0.146 -> -0.027 m), mean return clearance +0.065 m, landing on average 0.07 m from
+  the mark instead of 0.18 m, home time +0.5 s. Not deployable until `config/goals.yaml` changes (the
+  drone reads it): **for the planner terminal**, which owns that file:
+  `return_walls: [{wall: [[-2.90, 0.324], [-2.15, 0.402]], offset: 0.42}]`  (delete the M1 line).
+- The two scrapes left are on the west side (x -2.6..-2.77), not the M1 corner: not yet looked at.
+- 16 seeds: a direction, not a rate. Before adopting, re-run on 24+ seeds with the planner's final
+  goals.yaml.
