@@ -1,16 +1,20 @@
 """ROS 2 adapter for the goal navigator (``drone_ref.goalnav``).
 
-Subscribes: PX4 local position and attitude (read only); ``/skybeta/state``
-(armed, Offboard, landed, from skybeta's flight_interface); the OAK-D depth
-and RGB images and their CameraInfo; PX4's distance sensor (the downward
-VL53L1X).
+Subscribes: PX4 local position (also the downward rangefinder's reading,
+``dist_bottom``: PX4 v1.16 does not publish distance_sensor over DDS) and
+attitude, read only; ``/skybeta/state`` (armed, Offboard, landed, from
+skybeta's flight_interface); the stereo points and rectified left image of
+``drone_ref.stereo_node`` (the drone's cameras are a mono pair, with no
+on-camera depth and no colour); optionally a colour image for the pad.
 Publishes velocity setpoints on ``/skybeta/setpoint/twist``
 (``goalnav.skybeta``) and status JSON on ``/goalnav/status``; never anything
 on ``/fmu/in/*``. It streams a zero twist from start-up, so flight_interface
 may enter Offboard when the pilot arms and then switches to Position; the
 mission starts (takes off) as soon as Offboard is active. The landing target
-is found in the OAK-D's RGB image (``goalnav.pad_detect``, from a reference
-picture of the mat).
+is found in a colour image (``goalnav.pad_detect``, from a reference picture
+of the mat) when ``pad_image_topic`` names one; the drone has none (the
+stack runs no colour camera), and in brightness alone the mat matches the
+floor, so on the drone the pad is not found yet.
 
 Depth points are placed with the pose received nearest the image's capture
 stamp (both on the ROS clock), so latency does not smear the map.
@@ -26,12 +30,12 @@ import yaml
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from geometry_msgs.msg import TwistStamped
-from px4_msgs.msg import DistanceSensor, VehicleAttitude, VehicleLocalPosition
-from sensor_msgs.msg import CameraInfo, Image
+from px4_msgs.msg import VehicleAttitude, VehicleLocalPosition
+from sensor_msgs.msg import CameraInfo, Image, PointCloud2
 from std_msgs.msg import String
 
 from drone_ref.goalnav import skybeta
-from drone_ref.goalnav.geometry import camera_to_odom, depth_points, ned_to_enu, optical_to_body, px4_attitude_enu
+from drone_ref.goalnav.geometry import camera_to_odom, ned_to_enu, optical_to_body, px4_attitude_enu
 from drone_ref.goalnav.floor_line import dark_floor_points
 from drone_ref.goalnav.pad_detect import PadDetector
 from drone_ref.goalnav.mission import GoalMission, Telemetry
@@ -40,11 +44,13 @@ from drone_ref.goalnav.profiles import load as load_profile
 
 PARAMS = {
     'goals_file': 'config/goals.yaml',
-    'depth_topic': '/oak/stereo/image_raw', 'camera_info_topic': '/oak/stereo/camera_info',
-    'range_topic': '/fmu/out/distance_sensor',
-    'rgb_topic': '/oak/rgb/image_raw', 'rgb_info_topic': '/oak/rgb/camera_info',
-    'camera_offset': [0.10, 0., 0.], 'camera_pitch_deg': 26.7, 'depth_tile': 8,
-    'min_depth': 0.31, 'max_depth': 6.0, 'control_hz': 50.,
+    'points_topic': '/goalnav/stereo/points',            # drone_ref.stereo_node
+    'image_topic': '/goalnav/stereo/left', 'image_info_topic': '/goalnav/stereo/left_info',
+    'pad_image_topic': '', 'pad_info_topic': '',          # a colour image for the pad (none on the drone)
+    # The left camera, from skybeta-03's TF (base_link -> oak_left_camera_optical_frame):
+    # (0.105, 0.038, 0.030) m; its pitch 27 deg down (TF 27.6, IMU gravity ~26, overwall_nav 27).
+    'camera_offset': [0.105, 0.038, 0.030], 'camera_pitch_deg': 27.0, 'max_points': 6000,
+    'min_depth': 0.25, 'max_depth': 6.0, 'control_hz': 50.,
     'profile': 'safe', 'profiles_file': 'config/goalnav_profiles.yaml',
     'tuning': '',            # YAML dict of overrides on the profile, e.g. "{max_speed: 0.7}"
 }
@@ -74,18 +80,19 @@ class GoalNavNode(Node):
         self.history = deque(maxlen=200)          # (ros time s, position ENU, rotation)
         self.position = self.attitude = None
         self.flight = (False, False, None)        # (armed, offboard, landed) from /skybeta/state
-        self.camera = None
         qos = qos_profile_sensor_data
         self.create_subscription(VehicleLocalPosition, '/fmu/out/vehicle_local_position', self._position, qos)
         self.create_subscription(VehicleAttitude, '/fmu/out/vehicle_attitude', self._attitude, qos)
         self.create_subscription(String, skybeta.STATE_TOPIC, self._state, 10)
-        self.create_subscription(Image, p['depth_topic'], self._depth, qos)
-        self.create_subscription(CameraInfo, p['camera_info_topic'], self._info, qos)
-        self.create_subscription(DistanceSensor, p['range_topic'], self._range, qos)
-        self.create_subscription(Image, p['rgb_topic'], self._rgb, qos)
-        self.create_subscription(CameraInfo, p['rgb_info_topic'], self._rgb_info, qos)
+        self.create_subscription(PointCloud2, p['points_topic'], self._points, qos)
+        self.create_subscription(Image, p['image_topic'], self._image, qos)
+        self.create_subscription(CameraInfo, p['image_info_topic'], self._image_info, qos)
+        if p['pad_image_topic']:
+            self.create_subscription(Image, p['pad_image_topic'], self._pad_image, qos)
+            self.create_subscription(CameraInfo, p['pad_info_topic'], self._pad_info, qos)
         self.pad_detector = PadDetector()
-        self.rgb_camera = None
+        self.image_camera = self.pad_camera = None       # (fx, fy, cx, cy, rectification R)
+        self.floor_cells = None                          # the last cloud's floor, for the tape check
         self.twist_pub = self.create_publisher(TwistStamped, skybeta.TWIST_TOPIC, 10)
         self.status_pub = self.create_publisher(String, '/goalnav/status', 10)
         self.dt = 1. / float(p['control_hz'])
@@ -95,10 +102,6 @@ class GoalNavNode(Node):
     # -- inputs ----------------------------------------------------------------------
     def _now(self):
         return self.get_clock().now().nanoseconds * 1e-9
-
-    def _position(self, msg):
-        self.position = msg
-        self._remember()
 
     def _attitude(self, msg):
         self.attitude = msg
@@ -113,87 +116,97 @@ class GoalNavNode(Node):
     def _state(self, msg):
         self.flight = skybeta.parse_state(msg.data)
 
-    def _info(self, msg):
-        k = np.asarray(msg.k, float)
-        self.camera = (k[0], k[4], k[2], k[5])
-
     def _pose_at(self, when):
         if not self.history:
             return None
         best = min(self.history, key=lambda h: abs(h[0] - when))
         return best if abs(best[0] - when) < 0.1 else None
 
-    def _depth(self, msg):
-        if self.camera is None:
-            return
-        pose = self._pose_at(_stamp_s(msg.header))
-        if pose is None:
-            return
-        raw = np.frombuffer(bytes(msg.data), dtype=np.uint16 if msg.encoding == '16UC1' else np.float32)
-        depth = raw.reshape(msg.height, msg.width).astype(np.float32)
-        if msg.encoding == '16UC1':
-            depth = depth / 1000.
-        p = self.p
-        self.last_depth = (depth, pose)
-        points = depth_points(depth, *self.camera, tile=int(p['depth_tile']),
-                              min_depth=float(p['min_depth']), max_depth=float(p['max_depth']))
-        world, origin = camera_to_odom(points, pose[1], pose[2], p['camera_offset'],
-                                       math.radians(float(p['camera_pitch_deg'])))
-        self.mission.add_depth(origin, world)
-
-    def _range(self, msg):
-        telemetry = self._telemetry()
-        if telemetry is not None:
-            distance = float(msg.current_distance) if msg.signal_quality != 0 else None
-            self.mission.add_range(telemetry, distance)
-
-    def _rgb_info(self, msg):
-        k = np.asarray(msg.k, float)
-        self.rgb_camera = (k[0], k[4], k[2], k[5])
-
-    def _rgb(self, msg):
-        """Look for the landing target once the route is near its end."""
-        m = self.mission
-        if self.rgb_camera is None or m.route is None or m.floor is None or msg.encoding != 'rgb8':
-            return
-        want_pad = any(g.kind == 'pad' for g in m.route.upcoming(4))
-        if not (want_pad or m.wants_line()):
-            return
-        pose = self._pose_at(_stamp_s(msg.header))
-        if pose is None:
-            return
-        image = np.frombuffer(bytes(msg.data), dtype=np.uint8).reshape(msg.height, msg.width, 3)
+    def _camera_pose(self, pose, rectification=None):
+        """(origin, optical -> odom rotation) of the left camera at ``pose``; a
+        rectified image's frame is turned by R (X_rectified = R X_left)."""
         rotation = pose[2] @ optical_to_body(math.radians(float(self.p['camera_pitch_deg'])))
-        origin = pose[1] + pose[2] @ np.asarray(self.p['camera_offset'], float)
-        if m.wants_line() and getattr(self, 'last_depth', None) is not None:
-            points = dark_floor_points(image, *self.rgb_camera, origin, rotation, m.floor.floor_z)
-            m.add_line(self._confirmed_floor(points, m.floor.floor_z))
-        if want_pad:
-            found = self.pad_detector.detect(image, *self.rgb_camera, origin, rotation, m.floor.floor_z)
+        if rectification is not None:
+            rotation = rotation @ rectification.T
+        return pose[1] + pose[2] @ np.asarray(self.p['camera_offset'], float), rotation
+
+    def _points(self, msg):
+        """Stereo points (left camera optical frame) into the live map."""
+        pose = self._pose_at(_stamp_s(msg.header))
+        if pose is None or not msg.width:
+            return
+        points = np.frombuffer(bytes(msg.data), dtype=np.float32).reshape(-1, msg.point_step // 4)[:, :3]
+        distance = np.linalg.norm(points, axis=1)
+        points = points[(distance > float(self.p['min_depth'])) & (distance < float(self.p['max_depth']))]
+        if len(points) > int(self.p['max_points']):
+            points = points[np.linspace(0, len(points) - 1, int(self.p['max_points'])).astype(int)]
+        origin, rotation = self._camera_pose(pose)
+        world = points.astype(float) @ rotation.T + origin
+        self.mission.add_depth(origin, world)
+        if self.mission.floor is not None:
+            floor = world[np.abs(world[:, 2] - self.mission.floor.floor_z) < 0.06]
+            self.floor_cells = set(map(tuple, np.floor(floor[:, :2] / 0.1).astype(int)))
+
+    def _position(self, msg):
+        self.position = msg
+        self._remember()
+        telemetry = self._telemetry()
+        if telemetry is not None:      # The downward rangefinder, as PX4 reports it.
+            self.mission.add_range(telemetry, float(msg.dist_bottom) if msg.dist_bottom_valid else None)
+
+    @staticmethod
+    def _camera_info(msg):
+        k = np.asarray(msg.k, float)
+        r = np.asarray(msg.r, float).reshape(3, 3) if len(msg.r) == 9 else np.eye(3)
+        return k[0], k[4], k[2], k[5], r
+
+    def _image_info(self, msg):
+        self.image_camera = self._camera_info(msg)
+
+    def _pad_info(self, msg):
+        self.pad_camera = self._camera_info(msg)
+
+    def _frame(self, msg, camera):
+        """(image array, intrinsics, camera origin, rotation) or None."""
+        pose = self._pose_at(_stamp_s(msg.header))
+        if camera is None or pose is None or self.mission.floor is None:
+            return None
+        channels = 3 if msg.encoding in ('rgb8', 'bgr8') else 1
+        image = np.frombuffer(bytes(msg.data), dtype=np.uint8).reshape(msg.height, msg.width, channels)
+        image = image[..., ::-1] if msg.encoding == 'bgr8' else image
+        origin, rotation = self._camera_pose(pose, camera[4])
+        return (image if channels == 3 else image[..., 0]), camera[:4], origin, rotation
+
+    def _image(self, msg):
+        """The floor tape (CP1) in the rectified left image, while it matters."""
+        m = self.mission
+        if m.route is None or not m.wants_line():
+            return
+        frame = self._frame(msg, self.image_camera)
+        if frame is None:
+            return
+        image, k, origin, rotation = frame
+        m.add_line(self._confirmed_floor(dark_floor_points(image, *k, origin, rotation, m.floor.floor_z)))
+
+    def _pad_image(self, msg):
+        """The landing target in a colour image, once the route is near its end."""
+        m = self.mission
+        if m.route is None or not any(g.kind == 'pad' for g in m.route.upcoming(4)):
+            return
+        frame = self._frame(msg, self.pad_camera)
+        if frame is not None:
+            found = self.pad_detector.detect(frame[0], *frame[1], frame[2], frame[3], m.floor.floor_z)
             if found is not None:
                 m.add_pad(found)
 
-    def _confirmed_floor(self, points, floor_z, tolerance=0.1):
-        """Keep floor points the stereo depth also sees as floor (a dark
-        person beyond the net, cast onto the floor plane, is not)."""
-        if not len(points):
-            return points
-        depth, pose = self.last_depth
-        fx, fy, cx, cy = self.camera
-        rotation = pose[2] @ optical_to_body(math.radians(float(self.p['camera_pitch_deg'])))
-        origin = pose[1] + pose[2] @ np.asarray(self.p['camera_offset'], float)
-        world = np.column_stack([points, np.full(len(points), floor_z)])
-        optical = (world - origin) @ rotation          # odom -> optical (rotation is optical -> odom)
-        z = optical[:, 2]
-        front = z > 0.2
-        u = np.round(optical[:, 0] / np.maximum(z, 1e-6) * fx + cx).astype(int)
-        v = np.round(optical[:, 1] / np.maximum(z, 1e-6) * fy + cy).astype(int)
-        h, w = depth.shape
-        inside = front & (u >= 0) & (u < w) & (v >= 0) & (v < h)
-        seen = np.zeros(len(points))
-        seen[inside] = depth[v[inside], u[inside]]
-        agree = inside & (np.abs(seen - z) < tolerance * np.maximum(z, 1.))
-        return points[agree]
+    def _confirmed_floor(self, points):
+        """Keep tape points where the last stereo cloud saw floor (a dark person
+        beyond the net, cast onto the floor plane, is not on it)."""
+        if not len(points) or not self.floor_cells:
+            return points[:0]
+        cells = np.floor(points / 0.1).astype(int)
+        keep = np.array([tuple(c) in self.floor_cells for c in cells], bool)
+        return points[keep]
 
     def _telemetry(self):
         if self.position is None or self.attitude is None:
@@ -231,7 +244,9 @@ class GoalNavNode(Node):
                'speed_limit': round(m.speed, 2), 'free_ahead': round(m.free_ahead, 2),
                'heading_correction_deg': round(math.degrees(route.heading_correction), 2) if route else None,
                'floor_z': round(m.floor.floor_z, 3) if m.floor else None,
-               'range': m.floor.last if m.floor else None}
+               'range': m.floor.last if m.floor else None,
+               'events': m.status.events[-3:],          # what it decided last (passed goals, phases)
+               'pad': [round(float(v), 3) for v in m.route.goals[-1].estimate] if route else None}
         self.status_pub.publish(String(data=json.dumps(out, default=str)))
 
 

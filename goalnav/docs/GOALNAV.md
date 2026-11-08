@@ -92,9 +92,20 @@ VL53L1X ──────► floor height (gated) ─────────�
 through the organizers' `skybeta_flight_interface`
 (`skybetav1/docs/competitor_guide.md` §1-4); nothing is published on
 `/fmu/in/*`:
-- **Subscribes:** PX4 local position and attitude (read only);
-  `/skybeta/state` (armed, Offboard, landed); depth and CameraInfo; RGB;
-  `/fmu/out/distance_sensor`.
+- **Subscribes:** PX4 local position and attitude (read only; the
+  downward laser's reading is the position's `dist_bottom`: PX4 v1.16 does
+  not publish `distance_sensor` over DDS); `/skybeta/state` (armed,
+  Offboard, landed); `drone_ref/stereo_node.py`'s points and rectified left
+  image; a colour image for the pad only if `pad_image_topic` names one.
+- **Sees with** `stereo_node`: skybeta-03's camera publishes only the raw
+  mono pair (1024x640, 30 Hz) and the IMU, for cuVSLAM: no on-camera depth,
+  no colour. The node matches the pair on the Jetson with overwall_nav's
+  `StereoRig` (scale 0.4, SGBM; ~4.5 Hz, ~130 ms old with cuVSLAM running)
+  and publishes the points (left camera frame) and the rectified left image.
+  It is the only subscriber to the full-size images: a second Python one
+  drops frames. The floor tape is found in that image by brightness (under
+  0.3 of the floor's). The pad is not: in brightness alone the mat is within
+  ~10 % of the floor (see goalnav/README.md).
 - **Publishes:** `/skybeta/setpoint/twist` at the control rate (50 Hz), and
   `/goalnav/status`.
 - **Start:** no command. The node streams a zero twist from start-up (the
@@ -221,16 +232,23 @@ Where it fails:
 
 ## Limits
 
-- The pad detector in the simulator is an oracle: the pad's true centre, with
-  noise, whenever it is in the camera's view. A real RGB detector for the blue
-  H mat is not written.
-- Nothing uses the floor line yet; the simulator only records where it is.
+- The pad detector is the real one (`pad_detect.py`) on rendered colour, so
+  only with `--assume-colour-pad`.
 - There is no stereo image and no cuVSLAM: VIO is the vehicle model's
   drifting estimate.
 - The PX4 model is the Python one, not SITL. Between goalnav and it runs
   the organizers' `flight_interface` itself, unmodified (`localsim/goalrun.py`,
-  on `fakeros`): its clamps, conversions, twist expiry and 10 Hz output. The
-  safety pilot arms on Altitude at 3 s and switches to Position 1.5 s later.
+  on `fakeros`; 0.3.3, as on skybeta-03): its clamps, conversions, twist
+  expiry and 10 Hz output. PX4 is system 3 and ignores commands for any other.
+  The safety pilot arms on Altitude at 3 s and switches to Position 1.5 s later.
+- The simulator gives goalnav what skybeta-03 gives it: stereo points from
+  the left camera's mount as measured (27.6 deg down, (0.105, 0.038, 0.030) m;
+  goalnav assumes 27), half of them matched, 0.2-6 m, at 4.5 Hz and 130 ms
+  old; a mono image (205x128, half the stereo node's); the laser's reading
+  in `dist_bottom` (a 1 deg beam). Stereo is not rendered: the depth's holes
+  are random, not where real matching fails (glare, blank surfaces).
+  `--assume-colour-pad` adds a colour image for the pad; without it the pad is
+  never found, as on the drone.
 - Panel dimensions, strut geometry, window size and tunnel height are
   estimates from photos and team notes, not measurements.
 - Unit tests for `goalnav` are not written.

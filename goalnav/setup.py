@@ -13,5 +13,6 @@ setup(
     python_requires='>=3.10', zip_safe=False,
     maintainer='SnowCrashers', maintainer_email='snowcrashers@example.invalid',
     description='Goal navigation on a live map for the DroneHacks course (Sky Beta)', license='MIT',
-    entry_points={'console_scripts': ['goalnav_node=drone_ref.goalnav_node:main']},
+    entry_points={'console_scripts': ['goalnav_node=drone_ref.goalnav_node:main',
+                                    'stereo_node=drone_ref.stereo_node:main']},
 )
