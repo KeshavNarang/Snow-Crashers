@@ -45,7 +45,8 @@ class StereoDepthNode(Node):
                               ('output', '/overwall/front'), ('base_frame', 'base_link'),
                               ('rate_hz', 5.0), ('scale', 0.5), ('num_disparities', 96), ('step', 2),
                               ('camera_pitch_deg', 27.0), ('corridor_m', 0.4), ('swap_lr', False),
-                              ('log_period_s', 1.0)):
+                              ('log_period_s', 1.0),
+                              ('matcher', 'sgbm')):     # sgbm (CPU) | vpi-cuda (GPU) | vpi-ofa (OFA engine)
             self.declare_parameter(name, default)
         g = lambda n: self.get_parameter(n).value  # noqa: E731
         self.period = 1.0 / float(g('rate_hz'))
@@ -54,7 +55,8 @@ class StereoDepthNode(Node):
         self.pitch = float(g('camera_pitch_deg'))
         self.corridor = float(g('corridor_m'))
         self.base_frame = g('base_frame')
-        self.rig_args = dict(scale=float(g('scale')), num_disparities=int(g('num_disparities')), step=int(g('step')))
+        self.rig_args = dict(scale=float(g('scale')), num_disparities=int(g('num_disparities')), step=int(g('step')),
+                             matcher=str(g('matcher')))
         self.bridge = CvBridge()
         self.info = {}
         self.rig = None
@@ -110,7 +112,7 @@ class StereoDepthNode(Node):
             f'calibration from {source}: f {rig.f:.1f} px (scaled), baseline {rig.baseline * 100:.1f} cm, '
             f'range {rig.min_range:.2f}-{rig.max_range:.1f} m; mount {self.pitch:.1f} deg down (TF says '
             f'{self.tf_pitch if self.tf_pitch is not None else "?"}), highest ray {self.top_edge:.1f} deg'
-            f'{", left/right SWAPPED" if self.swap else ""}')
+            f'{", left/right SWAPPED" if self.swap else ""}; matcher {rig.matcher_name}')
         return rig
 
     # -- per pair ------------------------------------------------------------------

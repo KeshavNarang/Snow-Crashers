@@ -15,9 +15,13 @@ publishes, for each pair it processes (at most ``rate_hz``):
 
 It is the only node that takes the full-size 30 Hz images (best effort, depth 2): a
 second Python subscriber to them drops frames and loads the cores cuVSLAM runs on. It
-never commands the drone. Calibration: both CameraInfo and the TF from the left to the
+never commands the drone. Receiving and matching are apart: the subscription only keeps
+the latest pair, and ``workers`` threads match (OpenCV releases Python's lock while it
+works). In one thread, receiving ~28 pairs/s waited on matching: 2.8 Hz on skybeta-03
+with half the cores idle. Calibration: both CameraInfo and the TF from the left to the
 right optical frame (the stereo extrinsics cuVSLAM uses).
 """
+import threading
 import time
 
 import cv2
@@ -38,7 +42,7 @@ PARAMS = {'left_image': '/oak/left/image_mono', 'right_image': '/oak/right/image
           'left_info': '/oak/left/camera_info', 'right_info': '/oak/right/camera_info',
           'points': '/goalnav/stereo/points', 'image': '/goalnav/stereo/left',
           'image_info': '/goalnav/stereo/left_info',
-          'rate_hz': 5.0, 'scale': 0.4, 'num_disparities': 96, 'step': 2}
+          'rate_hz': 10.0, 'scale': 0.4, 'num_disparities': 96, 'step': 2, 'workers': 2}
 
 
 class StereoNode(Node):
@@ -49,7 +53,7 @@ class StereoNode(Node):
         self.p = {name: self.get_parameter(name).value for name in PARAMS}
         self.period = 1. / float(self.p['rate_hz'])
         self.bridge = CvBridge()
-        self.info, self.rig, self.last_done = {}, None, 0.
+        self.info, self.rig = {}, None
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.create_subscription(CameraInfo, self.p['left_info'], lambda m: self.info.setdefault('left', m), 1)
@@ -62,6 +66,10 @@ class StereoNode(Node):
         self.points_pub = self.create_publisher(PointCloud2, self.p['points'], 5)
         self.image_pub = self.create_publisher(Image, self.p['image'], 5)
         self.info_pub = self.create_publisher(CameraInfo, self.p['image_info'], 5)
+        self.latest, self.cond = None, threading.Condition()
+        self.next_start = 0.                 # workers start a pair no sooner than this (rate_hz)
+        for _ in range(int(self.p['workers'])):
+            threading.Thread(target=self._work, daemon=True).start()
 
     def _build_rig(self):
         if 'left' not in self.info or 'right' not in self.info:
@@ -82,14 +90,31 @@ class StereoNode(Node):
         return rig
 
     def _pair(self, left_msg, right_msg):
-        now = time.monotonic()
-        if now - self.last_done < self.period:
-            return
+        """Keep only the latest pair; the workers take it."""
         if self.rig is None:
             self.rig = self._build_rig()
             if self.rig is None:
                 return
-        self.last_done = now
+        with self.cond:
+            self.latest = (left_msg, right_msg)
+            self.cond.notify()
+
+    def _work(self):
+        while rclpy.ok():
+            with self.cond:
+                while True:
+                    if self.latest is None:
+                        self.cond.wait(timeout=1.)
+                        continue
+                    wait = self.next_start - time.monotonic()
+                    if wait <= 0:
+                        break
+                    self.cond.wait(timeout=wait)
+                pair, self.latest = self.latest, None
+                self.next_start = time.monotonic() + self.period
+            self._match(*pair)
+
+    def _match(self, left_msg, right_msg):
         left = self.bridge.imgmsg_to_cv2(left_msg, 'mono8')
         right = self.bridge.imgmsg_to_cv2(right_msg, 'mono8')
         points, _ = self.rig.points(left, right)
