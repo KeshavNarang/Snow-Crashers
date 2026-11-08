@@ -48,6 +48,26 @@ class VpiMatcherTest(unittest.TestCase):
             self.assertIsNotNone(got, d)
             self.assertAlmostEqual(got, d, delta=0.05 * d + 0.02)
 
+    def test_vpi_cuda_agrees_with_sgbm_and_is_faster(self):
+        """Same answers as the CPU matcher on the same pair, and a faster match, in this process."""
+        import time
+        cpu, gpu = rig(), rig(matcher='vpi-cuda')
+        left, right = synthetic.pair(cam_height=0.85, wall_distance=0.8, wall_top=1.0)
+        self.assertAlmostEqual(front(gpu, 0.8), front(cpu, 0.8), delta=0.03)
+        lr, rr = cpu.rectify(left, right)
+        r0, r1 = cpu.rows
+
+        def best(m, n=7):
+            m.compute(lr[r0:r1], rr[r0:r1])                       # warm-up (CUDA context)
+            ts = []
+            for _ in range(n):
+                t0 = time.perf_counter()
+                m.compute(lr[r0:r1], rr[r0:r1])
+                ts.append(time.perf_counter() - t0)
+            return min(ts)
+        ratio = best(cpu.matcher) / best(gpu.matcher)
+        self.assertGreater(ratio, 1.5, f'GPU match only {ratio:.2f}x faster than SGBM')
+
 
 if __name__ == '__main__':
     unittest.main()
