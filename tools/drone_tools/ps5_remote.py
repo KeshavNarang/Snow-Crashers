@@ -2,7 +2,8 @@
 
 Run through tools/ps5 (it opens the SSH tunnel). One JSON line every 50 ms:
     {"seq": n, "sticks": [forward, left, up], "events": [[id, name], ...]}
-sticks are zero unless L1 (the dead-man) is held. Button presses become events with increasing
+left stick = forward/back/left/right, R2 = up, L2 = down (no L1 needed: MANUAL mode, the
+controller flies the whole course). Button presses become events with increasing
 ids, resent for 2 s (the mission handles each id once). Cross only counts with L1 held.
 """
 import argparse
@@ -22,11 +23,8 @@ def axis(value):
 
 
 def message(state, seq, events, now):
-    """The line to send, from {'l1', 'lx', 'ly', 'ry'} (axes -1..1, SDL: y down) and recent events."""
-    if state['l1']:
-        sticks = [-state['ly'], -state['lx'], -state['ry']]
-    else:
-        sticks = [0.0, 0.0, 0.0]
+    """The line to send, from {'lx', 'ly', 'l2', 'r2'} (sticks -1..1, SDL: y down; triggers 0..1)."""
+    sticks = [-state['ly'], -state['lx'], state['r2'] - state['l2']]
     recent = [[i, name] for i, name, t in events if now - t <= EVENT_KEEP_S]
     return {'seq': seq, 'sticks': [round(v, 3) for v in sticks], 'events': recent}
 
@@ -46,7 +44,7 @@ def main():
     if controller.get_count() == 0:
         sys.exit('no controller found: pair the PS5 controller (Bluetooth, or USB-C cable) and retry')
     pad = controller.Controller(0)
-    print(f'controller: {pad.name}. Hold L1 to nudge; L1+Cross land here; Circle hold; Triangle resume; '
+    print(f'controller: {pad.name}. Left stick move, R2 up, L2 down; L1+Cross land here; Circle hold; Triangle resume; '
           f'Square clear. Ctrl-C to quit.')
     sock = None
     if not args.dry:
@@ -64,7 +62,8 @@ def main():
             l1 = bool(pad.get_button(pygame.CONTROLLER_BUTTON_LEFTSHOULDER))
             state = {'l1': l1, 'lx': axis(pad.get_axis(pygame.CONTROLLER_AXIS_LEFTX)),
                      'ly': axis(pad.get_axis(pygame.CONTROLLER_AXIS_LEFTY)),
-                     'ry': axis(pad.get_axis(pygame.CONTROLLER_AXIS_RIGHTY))}
+                     'l2': axis(pad.get_axis(pygame.CONTROLLER_AXIS_TRIGGERLEFT)),
+                     'r2': axis(pad.get_axis(pygame.CONTROLLER_AXIS_TRIGGERRIGHT))}
             for name, b in buttons.items():
                 down = bool(pad.get_button(b))
                 if down and not was[name] and (name != 'land' or l1):
@@ -80,7 +79,7 @@ def main():
                 print('\r' + line[:100].ljust(100), end='', flush=True)
             else:
                 sock.sendall(line.encode() + b'\n')
-                print('\rL1 %s  sticks %s' % ('HELD' if l1 else '--  ', msg['sticks']), end='', flush=True)
+                print('\rforward/left/up %s' % msg['sticks'], end='', flush=True)
             time.sleep(max(0.0, period - (time.monotonic() - now)))
     except (KeyboardInterrupt, BrokenPipeError, ConnectionResetError) as exc:
         print(f'\nstopped ({type(exc).__name__}): the drone ignores stale input after 0.3 s')
