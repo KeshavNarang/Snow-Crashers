@@ -20,9 +20,12 @@ Run the commands from the repo folder in **Git Bash** on your laptop.
 
 ## The cheese run (over the barrier, find the H, land)
 
-**Not ready to fly:** goalnav maps from on-camera depth, and on skybeta-03 on-camera depth costs
-PX4 its VIO fusion (agents/logs/2026-11-07-overwall-pad.md). The team image is `RGBSTEREO`
-(colour, no depth). A depth source for goalnav under RGBSTEREO is still to be chosen and tested.
+Camera: the team image `RGBSTEREO` (colour + mono pair). On-camera depth (`rgbd`) left PX4 without
+VIO fusion (vision 665 ms old, 2026-11-07 23:49). Depth comes from goalnav's `stereo_node` on the
+Jetson (started by goalnav.launch.py). Slow: `safe` profile, 0.4 m/s; 0.5 s on the pad before the return.
+**Not yet bench-checked on the drone** with Jetson depth: before the first flight, after 5 min warm-up,
+check PX4 fuses VIO (`preflight.sh`: PX4 position), `/goalnav/stereo/points` at 3 Hz or more, and the
+real mat seen by the colour camera (props off).
 
 Over USB, put `DRONE_HOST=192.168.55.1` in front of each command (Wi-Fi needs nothing).
 
