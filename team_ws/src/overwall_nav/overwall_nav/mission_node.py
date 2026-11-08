@@ -39,8 +39,12 @@ class OverWallNode(Node):
         self.create_subscription(Odometry, '/visual_slam/tracking/odometry', self.odom_cb, 10)
         self.create_subscription(String, '/overwall/front', self.front_cb, 10)
         # PX4's heading, read only (as flight_interface does): the heading the mission holds.
-        version = int(getattr(VehicleLocalPosition, 'MESSAGE_VERSION', 0))
-        topic = '/fmu/out/vehicle_local_position' + (f'_v{version}' if version else '')
+        try:        # the same topic flight_interface resolves for this px4_msgs generation
+            from skybeta_flight_interface.topics import resolve_endpoints
+            topic = resolve_endpoints()['vehicle_local_position']
+        except Exception:  # noqa: BLE001
+            version = int(getattr(VehicleLocalPosition, 'MESSAGE_VERSION', 0))
+            topic = '/fmu/out/vehicle_local_position' + (f'_v{version}' if version else '')
         px4_qos = QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, durability=DurabilityPolicy.TRANSIENT_LOCAL,
                              history=HistoryPolicy.KEEP_LAST, depth=5)
         self.px4_heading = None

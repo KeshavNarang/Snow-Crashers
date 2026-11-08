@@ -61,6 +61,21 @@ cd team_ws/src/overwall_nav && python -m unittest discover -s test     # ~2.5 mi
   wall, too tall, no wall, false matches, no/lost depth, takeover, height offset, close wall.
 - `test_checks.py`: the sensor-check verdicts.
 
+## Course set-up (2026-11-07)
+
+Start on the floor **facing the wall, 27 in (0.686 m) from it**; it lands **6 ft 2 in (1.880 m)
+past the wall**. The wall's position comes from depth when it stops (27 in is the cross-check
+and fallback), so it does not matter whether 27 in was taken from the centre or the front.
+
+- It climbs straight up to 0.7 m before reading the wall: the wall's bottom 30 cm is a hole.
+- The forward backstop is 0.25 m: the wall is right in front.
+- **Heading:** held at PX4's own heading from Offboard start to landing (with no yaw, PX4
+  1.16 holds none: the takeoff once yawed ~30 deg).
+- **Cross bar 10 cm proud of the wall:** the 0.5 m gap held while climbing uses the median of
+  the last 7 depth readings, an 8 cm deadband and 0.1 m/s, so passing the bar does not make it
+  back off (model: 5 cm unfiltered, 0 filtered).
+- 9.5 ft net: the drone's top stays 0.4 m below it; the height limit is 2.2 m.
+
 ## Before each test flight (stack running overwall.launch.py)
 
 1. `config/overwall.yaml`: `wall_height_m: 0.0` measures the wall top with the camera (the point

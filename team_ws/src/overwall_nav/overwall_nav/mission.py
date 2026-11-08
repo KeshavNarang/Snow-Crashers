@@ -19,7 +19,8 @@ switches to Position on the ground, and that is the go signal.
                 the wall's top edge comes into view below the camera, then to the measured top
                 + over_margin_m. Top never seen by max_height_m: wall still in front -> too
                 tall, land in front of it; nothing seen at all -> go over at max height.
-    OVER        fly over_distance_m forward at that height (pauses and climbs if something
+    OVER        fly forward at that height to land_beyond_wall_m past the wall face (measured by
+                depth at the stop; start_to_wall_m if no reading) (pauses and climbs if something
                 comes within guard_m)
     ARRIVE / DESCEND / TOUCHDOWN / DONE   as snowcrashers_nav: poses to the 0.3 m floor,
                 then a 0.4 m/s downward twist (PX4's land detector needs a commanded
@@ -50,8 +51,12 @@ class Params:
         self.max_height_m = 2.2          # never above this above the start (interface caps at 3.0)
         self.climb_speed_mps = 0.3
         self.keep_gain = 0.6             # 1/s, holding the wall distance by depth while climbing
-        self.keep_max_mps = 0.15
-        self.over_distance_m = 2.0       # forward from the stop point: past the wall + room to land
+        self.keep_max_mps = 0.10
+        self.keep_window = 7             # readings in the median (~1.4 s at 5 Hz): a cross bar sticking
+        self.keep_deadband_m = 0.08      # out of the wall passes by without the drone backing off
+        self.land_beyond_wall_m = 1.880  # 6 ft 2 in: land with the drone's centre this far past the wall face
+        self.start_to_wall_m = 0.0       # > 0: wall distance expected from the take-off spot (check + fallback)
+        self.camera_forward_m = 0.105    # camera ahead of the drone's centre (base_link -> camera TF)
         self.over_speed_mps = 0.35
         self.over_accel_mps2 = 0.3
         self.guard_m = 0.35              # in OVER, something this close: pause and climb
@@ -155,7 +160,11 @@ class Mission:
         self.wall_readings = []
         self.wall_d = None
         self.wall_top = None
+        self.wall_along = None           # wall face, metres from the take-off spot along the heading
+        self.over_len = 0.0
         self.top_readings = []
+        self.keep_readings = []
+        self.keep_last = None
         self.floor_seen = False
         self.stop_why = None
         self.close_count = 0
@@ -362,8 +371,10 @@ class Mission:
                         self.result['stopped_on'] = 'floor occlusion'
                     self.enter('HOLD_WALL', now, 'Stopping at %.2f m forward: %s.' % (along, self.stop_why))
                 elif self.along_target >= p.max_forward_m:
-                    if abs(along - p.max_forward_m) < p.reach_xy_m or t > 30.0:
-                        self.descend(now, here, 'No wall within %.1f m: landing here.' % p.max_forward_m)
+                    # Wait for the drone itself, not just its target (it lags ~0.2 m behind):
+                    # with a short backstop the wall may only read close enough on the way there.
+                    if along >= p.max_forward_m - 0.05 or t > 30.0:
+                        self.descend(now, here, 'No wall within %.2f m: landing here.' % p.max_forward_m)
                 else:
                     self.speed = min(p.approach_speed_mps, self.speed + p.approach_accel_mps2 * dt)
                     self.along_target = min(p.max_forward_m, self.along_target + self.speed * dt)
@@ -381,7 +392,19 @@ class Mission:
                     self.result['wall_distance_m'] = round(self.wall_d, 2)
                 else:
                     self.wall_d = p.stop_distance_m
+                # Where the wall face is, measured from the take-off spot along the heading.
+                if self.wall_readings:
+                    self.wall_along = along + p.camera_forward_m + self.wall_d
+                    if p.start_to_wall_m > 0 and abs(self.wall_along - p.start_to_wall_m) > 0.3:
+                        self.say('Depth puts the wall %.2f m from the start, the settings say %.2f m: using depth.'
+                                 % (self.wall_along, p.start_to_wall_m))
+                elif p.start_to_wall_m > 0:
+                    self.wall_along = p.start_to_wall_m
+                    self.say('No depth reading of the wall face: using start_to_wall_m %.2f m.' % p.start_to_wall_m)
+                else:
+                    self.wall_along = along + p.camera_forward_m + p.stop_distance_m + p.reaction_m
                 self.result['wall_at_forward_m'] = round(along, 2)
+                self.result['wall_from_start_m'] = round(self.wall_along, 2)
                 if p.wall_height_m > 0:
                     self.over_z = min(top_z, self.start[2] + p.wall_height_m + p.over_margin_m - self.cam_ground)
                 self.enter('CLIMB_OVER', now, 'Wall %.2f m ahead. Climbing over%s.' % (
@@ -389,9 +412,17 @@ class Mission:
 
         elif self.phase == 'CLIMB_OVER':
             if distance is not None and new_front:                    # hold the gap by depth
-                error = distance - p.stop_distance_m
-                step = max(-p.keep_max_mps, min(p.keep_max_mps, p.keep_gain * error)) * 0.1
-                self.along_target += step
+                # Filtered: the median of the last keep_window readings, a deadband, a slow rate.
+                # A bar or ledge sticking out of the wall reads ~10 cm closer for the moment the
+                # camera passes it; without this the drone would back off and creep back.
+                self.keep_readings = (self.keep_readings + [distance])[-int(p.keep_window):]
+                gap = sorted(self.keep_readings)[len(self.keep_readings) // 2]
+                error = gap - p.stop_distance_m
+                if len(self.keep_readings) >= min(3, int(p.keep_window)) and abs(error) > p.keep_deadband_m:
+                    error -= math.copysign(p.keep_deadband_m, error)
+                    dt_front = min(0.5, max(0.0, now - (self.keep_last or now)))
+                    self.along_target += max(-p.keep_max_mps, min(p.keep_max_mps, p.keep_gain * error)) * dt_front
+                self.keep_last = now
             if p.wall_height_m <= 0 and seen and seen['top_visible'] and new_front:
                 top = self.cam_height(here) + seen['top_u']             # wall top above the floor
                 if self.wall_top is None:
@@ -409,8 +440,11 @@ class Mission:
             if self.over_z is not None:
                 if self._held(at_goal, now):
                     self.over_from, self.over_t = self.along_target, 0.0
-                    self.enter('OVER', now, 'At %.2f m: flying %.1f m forward over the wall.'
-                               % (height, p.over_distance_m))
+                    land_at = self.wall_along + p.land_beyond_wall_m
+                    self.over_len = max(0.3, land_at - self.over_from)
+                    self.result['land_target_from_start_m'] = round(land_at, 2)
+                    self.enter('OVER', now, 'At %.2f m: flying %.2f m forward over the wall, to land %.2f m past it '
+                               '(%.2f m from the start).' % (height, self.over_len, p.land_beyond_wall_m, land_at))
             elif at_goal:                                            # max height, top never seen
                 if distance is not None:
                     self.descend(now, here, 'Wall still %.2f m ahead at the %.2f m limit: too tall, landing '
@@ -431,7 +465,7 @@ class Mission:
                 self.blocked_since = None
                 self.over_t += dt                                    # progress only while clear
             if self.phase == 'OVER':
-                s, done = trapezoid(self.over_t, p.over_distance_m, p.over_speed_mps, p.over_accel_mps2)
+                s, done = trapezoid(self.over_t, self.over_len, p.over_speed_mps, p.over_accel_mps2)
                 self.target = self._point(self.over_from + s, self.over_z)
                 if done:
                     self.goal = self.target
