@@ -109,8 +109,9 @@ class PadTest(unittest.TestCase):
         # model (a histogram of the reference picture) marked 9 % of the real mat there, so the
         # flights saw "0 blue blobs" and landed at the set distance, by the ladder. The mask must
         # cover most of the mat (net strands, the dark pixels, excluded).
-        photo = Path(__file__).resolve().parents[4] / 'photos' / 'New_Ladder_1.jpeg'
-        if not photo.exists():
+        up = Path(__file__).resolve().parents
+        photo = up[4] / 'photos' / 'New_Ladder_1.jpeg' if len(up) > 4 else None
+        if photo is None or not photo.exists():
             self.skipTest('photos/ not on this machine')
         import cv2
         small = cv2.resize(cv2.imread(str(photo)), (675, 900))
