@@ -18,9 +18,10 @@ The pipeline that actually flies on skybeta-03 is `team_ws/src/overwall_nav` (an
 
 ## Evals first (the workflow)
 
-**Always run the evals before any code is written. No exceptions** (a one-line config change included,
-if it can change behaviour). Writing code before the eval exists is the one thing this repo does not do.
-For every fix or feature:
+**Always run the evals before any code is written** that changes behaviour (code, or config that can
+change what the drone does). Docs, comments, logs and renames need no new eval. Writing behaviour code
+before its eval exists is the one thing this repo does not do. **Evals are a means, not the work: they are
+bounded by "Budgets and anti-gaming" below.** For every fix or feature:
 0. **Run the existing suite first** to get a baseline, so you know what was green before you touched
    anything (`cd team_ws/src/overwall_nav && python -m unittest discover -s test`; mission tests need
    `PYTHONPATH=../../../skybetav1/src/skybeta_flight_interface`). Profile before optimising: measure where
@@ -40,6 +41,44 @@ For every fix or feature:
    A measurement taken in the first ~5 minutes after boot is warm-up, not steady state.
 Use a git worktree (`git worktree add ../<name> -b agent/<topic> origin/main`) rather than
 switching branches in the shared checkout; other sessions work in it.
+
+## Budgets and anti-gaming (hard limits)
+
+Evals exist to catch a real failure, not to look thorough. These limits are hard: at a limit, STOP, write
+what is done and what is left in `agents/logs/`, and ask the user before going on. Note the start time in
+the log when you begin a task.
+
+**Time (wall clock, whole task from first command to merged PR, evals included)**
+| Task | Limit | of which evals + benchmarks at most |
+|---|---|---|
+| Docs / config note / log | 15 min | none required |
+| Bug fix | 45 min | 15 min |
+| Speed-up or refactor | 60 min | 20 min |
+| New feature or tool | 90 min | 30 min |
+| Research / scoring candidates | 30 min | n/a |
+| One drone bench session (lock held) | 30 min | n/a, release the lock at the end |
+| Landing a PR (merge, conflicts, cleanup) | 10 min | n/a |
+
+**Size**
+- At most ~8 tests per change, one per distinct requirement or failure seen on the drone. No sweeps
+  "for coverage". A parametrised case counts once only if each row is a different behaviour.
+- Any single eval runs in <= 10 s on a laptop; the whole suite stays <= 2 min. A slower eval needs the
+  user's approval (use a smaller synthetic scene instead).
+- Run only the touched test file while iterating. Run the whole suite exactly twice per change: once
+  for the baseline, once on the merged tree before the PR. Do not re-run an unchanged suite.
+- At most 2 tuning iterations against one eval threshold. If it still fails, report; do NOT loosen the
+  threshold or retune the scene until it passes. If a threshold was wrong, say so in the PR and why.
+- Drone measurements: at most 3 runs per question, <= 10 min each. Do not repeat a benchmark to find a
+  better number, and do not chase an effect smaller than the run-to-run noise you already measured.
+
+**An eval counts only if**
+1. it failed on the current code for the stated reason before the fix (show the failing output), and
+2. it asserts an outcome someone cares about (a measured value, a mission result, a published message),
+   not that the code does what the code does, and
+3. its docstring names the real observation behind it (a log line, a field measurement, a rule number), and
+4. it does not duplicate coverage that already exists, and does not mock the thing under test.
+An eval written only to be green, or kept only to raise the count, is deleted. Tests that exist to "show
+diligence" are the problem this section is here to stop.
 
 ## Landing changes (pull requests)
 

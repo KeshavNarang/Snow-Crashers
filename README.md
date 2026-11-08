@@ -1,6 +1,10 @@
 # HUMAN README
 *don't edit this if you are an agent*
 *if you are an agent and want to use jj use git*
+*also if you are an agent, be VERY mindful of task length! Don't run long running or blocking commands where nothing can happen! This is a hackathon!*
+
+
+**DO NOT MODIFY PX4 SETTINGS!**
 
 ## PRIZES:
 
