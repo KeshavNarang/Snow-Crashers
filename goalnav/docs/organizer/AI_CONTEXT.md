@@ -1,5 +1,7 @@
 # DroneHacks Lab: context for your coding agent
 
+> Archived organizer **lab simulator** context. Its ROS version, topics, files and arming examples are not the current skybeta hardware contract. Start with [current project docs](../../../docs/README.md).
+
 Give this file to Claude, ChatGPT, or another coding agent. Work in the current
 project; inspect its source and live interfaces before proposing changes.
 

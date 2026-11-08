@@ -21,7 +21,15 @@ switches to Position on the ground, and that is the go signal.
                 tall, land in front of it; nothing seen at all -> go over at max height.
     OVER        fly forward at that height to land_beyond_wall_m past the wall face (measured by
                 depth at the stop; start_to_wall_m if no reading) (pauses and climbs if something
-                comes within guard_m)
+                comes within guard_m). With pad_detect running (/overwall/pad fresh), only to
+                look_beyond_wall_m past it, then:
+    LOOK        descend there until the camera is look_height_m above the floor and wait pad_wait_s.
+                The colour camera sees the floor only from ~0.87x its height ahead, and the wall
+                hides the floor behind it: from the crossing height the whole mat is never in view.
+    SWEEP       mat still unseen: turn search_yaw_deg left, right and back once.
+    TO_PAD      the mat seen whole twice in the same place (any of OVER / LOOK / SWEEP): fly over
+                its centre at the current height, then ARRIVE and land there. Not seen by the end
+                of the sweep: fly to land_beyond_wall_m past the wall at the look height and land.
     ARRIVE / DESCEND / TOUCHDOWN / DONE   as snowcrashers_nav: poses to the 0.3 m floor,
                 then a 0.4 m/s downward twist (PX4's land detector needs a commanded
                 descent >= 0.275 m/s) until PX4 detects the landing and disarms.
@@ -33,6 +41,7 @@ below vision's on the ground).
 """
 import math
 
+from overwall_nav.pad import pick_pad
 from overwall_nav.perception import analyze
 
 
@@ -80,6 +89,14 @@ class Params:
         self.body_above_m = 0.08         # props above the drone's centre
         self.camera_above_m = 0.03       # camera above the drone's centre
         self.stale_s = 1.0
+        self.look_beyond_wall_m = 0.55   # drone centre this far past the wall face to look for the mat
+        self.look_height_m = 0.8         # camera above the floor when looking (sees the floor from ~0.7 m)
+        self.pad_wait_s = 2.0            # look this long before sweeping
+        self.search_yaw_deg = 35.0       # the sweep: this far left, right, back
+        self.search_rate_dps = 30.0
+        self.pad_stale_s = 1.0           # /overwall/pad older than this: pad_detect is not running
+        self.pad_agree_m = 0.25          # two sightings this close are the mat
+        self.pad_past_wall_m = 0.3       # a mat nearer than this past the wall face is not ours
         self.repeat = True
         for key, value in overrides.items():
             if not hasattr(self, key):
@@ -125,8 +142,8 @@ class Mission:
     + 'received', or None.
     """
 
-    FLYING = ('CLIMB', 'SETTLE', 'APPROACH', 'HOLD_WALL', 'CLIMB_OVER', 'OVER', 'ARRIVE',
-              'DESCEND', 'TOUCHDOWN')
+    FLYING = ('CLIMB', 'SETTLE', 'APPROACH', 'HOLD_WALL', 'CLIMB_OVER', 'OVER', 'LOOK', 'SWEEP',
+              'TO_PAD', 'ARRIVE', 'DESCEND', 'TOUCHDOWN')
 
     def __init__(self, params=None):
         self.p = params or Params()
@@ -170,6 +187,12 @@ class Mission:
         self.close_count = 0
         self.last_front_stamp = None
         self.cam_ground = None
+        self.looking = False             # OVER ends at the look point (pad_detect running)
+        self.pad_fixes = []              # mat centres seen, odom (x, y)
+        self.pad_xy = None
+        self.last_pad_stamp = None
+        self.goto_from = self.goto_to = None
+        self.goto_t = 0.0
 
     # -- helpers ---------------------------------------------------------------
     def say(self, text):
@@ -225,6 +248,46 @@ class Mission:
         """Camera height above the floor: its height when landed + PX4's climb since the start."""
         return self.cam_ground + (here[2] - self.start[2])
 
+    def _yaw_now(self, odom):
+        if odom is None:
+            return None
+        return float(odom['px4_yaw']) if odom.get('px4_yaw') is not None else float(odom['yaw'])
+
+    def watch_pad(self, now, pad, odom, here):
+        """Add a new /overwall/pad sighting; True once the mat is fixed (self.pad_xy)."""
+        p = self.p
+        if not self._fresh(pad, now, p.pad_stale_s) or pad.get('received') == self.last_pad_stamp:
+            return self.pad_xy is not None
+        self.last_pad_stamp = pad.get('received')
+        yaw = self._yaw_now(odom)
+        seen = pick_pad(pad.get('candidates'), self.cam_height(here))
+        if seen is None or yaw is None:
+            return self.pad_xy is not None
+        c, s = math.cos(yaw), math.sin(yaw)
+        cam = (here[0] + p.camera_forward_m * c, here[1] + p.camera_forward_m * s)
+        xy = (cam[0] + seen[0] * c - seen[1] * s, cam[1] + seen[0] * s + seen[1] * c)
+        if self.wall_along is not None and self._along((*xy, 0.0)) < self.wall_along + p.pad_past_wall_m:
+            return self.pad_xy is not None                     # on our side of the wall: not the mat
+        self.pad_fixes = (self.pad_fixes + [xy])[-5:]
+        near = [f for f in self.pad_fixes if math.hypot(f[0] - xy[0], f[1] - xy[1]) <= p.pad_agree_m]
+        if len(near) >= 2:
+            xs, ys = sorted(f[0] for f in near), sorted(f[1] for f in near)
+            first = self.pad_xy is None
+            self.pad_xy = (xs[len(xs) // 2], ys[len(ys) // 2])
+            left = (self.pad_xy[1] - self.start[1]) * self.forward[0] - (self.pad_xy[0] - self.start[0]) * self.forward[1]
+            self.result['pad_from_start_m'] = [round(self._along((*self.pad_xy, 0.0)), 2), round(left, 2)]
+            if first:
+                self.say('Pad seen: %.2f m forward, %.2f m left of the start (%.2f m past the wall).'
+                         % (self.result['pad_from_start_m'][0], left,
+                            self.result['pad_from_start_m'][0] - (self.wall_along or 0.0)))
+        return self.pad_xy is not None
+
+    def goto(self, now, here, to_xy, z, text):
+        self.goto_from = (self.target[0], self.target[1]) if self.target else (here[0], here[1])
+        self.goto_to, self.goto_t, self.over_z = to_xy, 0.0, z
+        self.hold_yaw = math.atan2(self.forward[1], self.forward[0])
+        self.enter('TO_PAD', now, text)
+
     def descend(self, now, where, text):
         self.land_xy = (float(where[0]), float(where[1]))
         self.descend_from = self.target[2] if self.target else where[2]
@@ -232,7 +295,8 @@ class Mission:
         self.enter('DESCEND', now, text)
 
     # -- the tick --------------------------------------------------------------
-    def step(self, now, state, odom, front):
+    def step(self, now, state, odom, front, pad=None):
+        """pad: the /overwall/pad dict from pad_detect ('candidates') + 'received', or None."""
         p = self.p
         dt = 0.0 if self.last_step is None else max(0.0, min(0.5, now - self.last_step))
         self.last_step = now
@@ -441,10 +505,16 @@ class Mission:
                 if self._held(at_goal, now):
                     self.over_from, self.over_t = self.along_target, 0.0
                     land_at = self.wall_along + p.land_beyond_wall_m
-                    self.over_len = max(0.3, land_at - self.over_from)
+                    self.looking = self._fresh(pad, now, p.pad_stale_s)
+                    end = self.wall_along + p.look_beyond_wall_m if self.looking else land_at
+                    self.over_len = max(0.3, end - self.over_from)
                     self.result['land_target_from_start_m'] = round(land_at, 2)
-                    self.enter('OVER', now, 'At %.2f m: flying %.2f m forward over the wall, to land %.2f m past it '
-                               '(%.2f m from the start).' % (height, self.over_len, p.land_beyond_wall_m, land_at))
+                    if self.looking:
+                        self.enter('OVER', now, 'At %.2f m: flying %.2f m forward over the wall, to look for the pad '
+                                   '%.2f m past it.' % (height, self.over_len, p.look_beyond_wall_m))
+                    else:
+                        self.enter('OVER', now, 'At %.2f m: flying %.2f m forward over the wall, to land %.2f m past '
+                                   'it (%.2f m from the start).' % (height, self.over_len, p.land_beyond_wall_m, land_at))
             elif at_goal:                                            # max height, top never seen
                 if distance is not None:
                     self.descend(now, here, 'Wall still %.2f m ahead at the %.2f m limit: too tall, landing '
@@ -467,9 +537,60 @@ class Mission:
             if self.phase == 'OVER':
                 s, done = trapezoid(self.over_t, self.over_len, p.over_speed_mps, p.over_accel_mps2)
                 self.target = self._point(self.over_from + s, self.over_z)
-                if done:
+                if self.looking and self.watch_pad(now, pad, odom, here):
+                    self.goto(now, here, self.pad_xy, self.over_z, 'Flying over the pad at %.2f m.' % height)
+                elif done and self.looking:
+                    look_z = max(self.start[2] + p.floor_m, self.start[2] + p.look_height_m - self.cam_ground)
+                    self.over_z = look_z
+                    self.enter('LOOK', now, 'Past the wall: down to %.2f m (camera %.2f m above the floor) to look '
+                               'for the pad.' % (look_z - self.start[2], p.look_height_m))
+                elif done:
                     self.goal = self.target
                     self.enter('ARRIVE', now)
+
+        elif self.phase in ('LOOK', 'SWEEP'):
+            z_now = self.target[2]
+            z = max(self.over_z, z_now - p.descent_fast_mps * dt)
+            self.target = (self.target[0], self.target[1], z)
+            low = z <= self.over_z + 1e-6 and abs(here[2] - self.clamp_z(self.over_z)) < p.reach_z_m
+            base = math.atan2(self.forward[1], self.forward[0])
+            if self.watch_pad(now, pad, odom, here):
+                self.goto(now, here, self.pad_xy, z, 'Flying over the pad at %.2f m.' % height)
+            elif self.phase == 'LOOK':
+                if self._held(low, now) and now - self.reached_since >= p.hold_s + p.pad_wait_s:
+                    self.enter('SWEEP', now, 'Pad not in view: Sweeping %.0f deg left and right.' % p.search_yaw_deg)
+            else:
+                a, r = math.radians(p.search_yaw_deg), math.radians(p.search_rate_dps)
+                turned = r * t
+                if turned < a:
+                    angle = turned
+                elif turned < 3 * a:
+                    angle = 2 * a - turned
+                elif turned < 4 * a:
+                    angle = turned - 4 * a
+                else:
+                    angle = 0.0
+                self.hold_yaw = base + angle
+                if turned >= 4 * a + r * p.hold_s:          # back on the heading, then a last look
+                    land_xy = self._point(self.wall_along + p.land_beyond_wall_m, z)[:2]
+                    self.result['pad'] = 'not seen'
+                    self.goto(now, here, land_xy, z, 'Pad not seen: landing %.2f m past the wall as set.'
+                              % p.land_beyond_wall_m)
+
+        elif self.phase == 'TO_PAD':
+            if self.pad_xy is not None and self.result.get('pad') != 'not seen':
+                self.watch_pad(now, pad, odom, here)
+                self.goto_to = self.pad_xy                    # later sightings refine it
+            length = max(1e-6, math.hypot(self.goto_to[0] - self.goto_from[0], self.goto_to[1] - self.goto_from[1]))
+            self.goto_t += dt
+            s, done = trapezoid(self.goto_t, length, p.over_speed_mps, p.over_accel_mps2)
+            k = min(1.0, s / length)
+            self.target = (self.goto_from[0] + k * (self.goto_to[0] - self.goto_from[0]),
+                           self.goto_from[1] + k * (self.goto_to[1] - self.goto_from[1]), self.over_z)
+            if done:
+                self.goal = (self.goto_to[0], self.goto_to[1], self.over_z)
+                self.target = self.goal
+                self.enter('ARRIVE', now)
 
         elif self.phase == 'ARRIVE':
             self.target = self.goal
