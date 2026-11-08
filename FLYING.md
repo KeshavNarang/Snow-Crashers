@@ -73,6 +73,23 @@ launch how the drone's start-up passes `tuning` through.
 After each flight run `tools/fly logs`, and write what happened (and the log folder name) in
 `agents/logs/` so the next person can pick it up.
 
+## Test in the simulator first (optional, on your laptop)
+
+From the `goalnav` folder (`cd goalnav`):
+
+```bash
+python -m localsim.goalrun --seed 1 --severity 0.7     # opens a 3D viewer of the run when done
+```
+
+It flies the same software against a simulated copy of the course, with the camera modelled as on
+the drone (RGBSTEREO). **The stepladder** sits where the team last saw it, which is currently its
+**original spot** between the barrier and the mat. If it moves again, change one word in
+`goalnav/localsim/messy_ladder.py`: `DEFAULT_POSE = 'original'` or `'moved'` (the south-west net
+corner). For one run only, add `--ladder-pose moved`. This only affects the simulator, not the drone.
+
+Latest check (2026-11-08, ladder in its original spot, 25 runs): **24 of 25** land on the helipad
+with no contact before landing. Simulator results don't guarantee the real drone will do the same.
+
 ## If something goes wrong
 
 | Problem | What to do |
