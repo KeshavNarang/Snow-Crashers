@@ -8,8 +8,8 @@ Branch `agent/cpu-monitor`; tools in `tools/drone_tools/` (README there). Drone 
 - Found by running on the real drone, then fixed with a failing eval first: sysfs thermal read raised
   `TypeError` (not OSError) and crashed the monitor; ROS topic discovery is asynchronous (first run
   said "topic not found" for everything); `dockerd` looked like a container; the monitor flagged itself.
-- Live eval (pinned burner, core 5): 8/8 PASS on the drone with burner at 0.998 cores. Re-run needed on the
-  final code (drone dropped off Wi-Fi before the last run).
+- Live eval (pinned burner, core 5): 8/8 PASS on the drone, also re-run on the final code (hashes matched the
+  commit) after the drone came back: 33/33 unit + 8/8 live, burner at 0.999 cores, nothing left running.
 
 ## Camera survey (skybeta-03, stack up ~10 min, props-free bench)
 - OAK-D S2 on USB3 (5000 Mbps), 1024x640, no USB errors. Rectified (median row offset 0.00 px), baseline
