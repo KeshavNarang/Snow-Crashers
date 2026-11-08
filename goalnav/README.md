@@ -9,7 +9,9 @@ CAD-replay race stack did not). ROS 2 package name: `drone_ref`.
 | Path | What |
 |---|---|
 | `drone_ref/goalnav/` | The navigator: live map, goal chain, A* planner, window manoeuvre, pad detection, return |
-| `drone_ref/goalnav_node.py` | ROS 2 adapter: OAK-D depth + RGB, VL53L1X; velocity setpoints to skybeta's `flight_interface` (never `/fmu/in/*`) |
+| `drone_ref/goalnav_node.py` | ROS 2 adapter: stereo points + mono image, PX4 position (and its rangefinder reading); velocity setpoints to skybeta's `flight_interface` (never `/fmu/in/*`) |
+| `drone_ref/stereo_node.py` | Depth and the rectified left image from the OAK-D's mono pair (overwall_nav's `StereoRig`), drone only |
+| `launch/goalnav.launch.py` | flight_interface, stereo_node, goalnav_node and the logger (`~/team_ws/logs`) |
 | `config/goals.yaml` | The course as a chain of goals, plus course facts (net anchors, return mark and corner, takeoff offset) |
 | `config/goalnav_profiles.yaml` | Risk profiles: `safe`, `normal`, `fast` |
 | `localsim/` | The as-built course simulator (`goalrun.py`), 3D viewer, run index |
@@ -32,16 +34,39 @@ Needs `numpy`, `scipy` (scan tool only) and `pyyaml` (`localsim/requirements.txt
 
 ## Fly
 
-Build with colcon (`goalnav_node` executable), then
+On skybeta-03 (see `team_ws/DRONE_SETUP.md`, the root `CLAUDE.md` and
+`tools/drone`; take `tools/drone-lock` first). The package needs `overwall_nav`
+(its stereo matcher) in the same workspace:
 
 ```
-ros2 launch drone_ref goalnav.launch.py profile:=safe tuning:='{stop_after: corridor_1}'
+tools/drone run 'rm -rf ~/team_ws/src/drone_ref'   # scp nests into an existing folder
+tools/drone push goalnav team_ws/src/drone_ref      # then, on the drone:
+cd ~/team_ws && ./run_mission.sh drone_ref goalnav.launch.py   # or set COMPETITOR_PKG/LAUNCH in drone.env
 ```
 
-The launch file also starts skybeta's `flight_interface` with
-`auto_offboard_on_arm:=true`. There is no start command: the pilot arms on
-Altitude, then switches to Position, the interface enters Offboard and the
-navigator takes off (docs/GOALNAV.md, "the ROS 2 adapter").
+`goalnav.launch.py` starts four things: skybeta's `flight_interface`
+(`auto_offboard_on_arm:=true`), `stereo_node` (depth and the rectified left
+image from the mono pair, ~5 Hz), `goalnav_node`, and the logger. There is no
+start command: the pilot arms on Altitude, then switches to Position, the
+interface enters Offboard and the navigator takes off (docs/GOALNAV.md, "the
+ROS 2 adapter"). Arguments: `profile`, `tuning`, `flight_interface`,
+`log_dir`, `record`, `record_video`.
+
+**Logs.** Every launch writes `~/team_ws/logs/<date-time>/` on the drone (the
+only folder that survives a stack restart or power cycle): `bag/` (MCAP, split
+every 2 GB) with both mono camera streams, IMU, the stereo points and image,
+cuVSLAM, PX4's state, `/skybeta/state`, every setpoint, `/goalnav/status` and
+`/rosout`; `ros/` with every node's log and screen output; `run.json`. The
+video is ~40 MB/s, ~7 GB for a 3-minute run (164 GB free on skybeta-03).
+Pull a run with `tools/drone pull team_ws/logs/<date-time> .`; replay it with
+`ros2 bag play`.
+
+**Not on the drone yet:** the pad. The stack runs no colour camera, and in
+brightness alone the blue mat is within ~10 % of the orange floor, so the
+colour detector has nothing to work with (`pad_image_topic` is empty). Until
+the organizers enable the colour camera or a mono detector is built from real
+images of the mat, the mission flies to its lookouts and aborts there
+(descends where it is).
 
 `stop_after: <goal id>` ends a staged test there: straight down until PX4
 disarms it (`COM_DISARM_LAND`). Goal
@@ -51,8 +76,11 @@ the bench first (check the camera panels, the camera's top edge level, the mat
 detected, time per frame), then `corridor_1`, then each checkpoint in turn.
 
 Check before flying: the PX4 origin's height over the feet (`landed_base_height`,
-0.07; the CAD's IMU is ~65 mm up), the camera offset and pitch (0.10 m, 26.7 deg),
-and that PX4's `COM_DISARM_LAND` stays above the 1 s rest on the pad.
+0.07; the CAD's IMU is ~65 mm up), the left camera's offset and pitch (from
+skybeta-03's TF: (0.105, 0.038, 0.030) m, 27 deg; `camera_offset`,
+`camera_pitch_deg`), that PX4's `COM_DISARM_LAND` stays above the 1 s rest on
+the pad, and with props off that the camera (`/oak/*/camera_info`) and
+cuVSLAM stay at 30 Hz while the stereo node and the recorder run.
 
 ## Since the notes
 
