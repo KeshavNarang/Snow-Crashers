@@ -212,23 +212,34 @@ def refine(goal, route, clearance, known, live_map, cap=0.55, min_clearance=0.32
     return True
 
 
+def wall_line(xy, point, direction, reach, min_cells, slab=0.25):
+    """(centre, along) of the straight wall near ``point``, crossed along
+    ``direction``: a line fit to the occupied cells ``xy`` within ``reach``,
+    or None if they are not a line. Only cells near the wall's middle depth
+    across ``direction`` count: a rock or a stand's foot within reach, a few
+    cells against a hundred on the wall, would otherwise turn the fit and
+    fail the line test."""
+    near = xy[np.linalg.norm(xy - point, axis=1) < reach]
+    depth = (near - point) @ direction
+    near = near[np.abs(depth - np.median(depth)) < slab] if len(near) else near
+    if len(near) < min_cells:
+        return None
+    centre = near.mean(axis=0)
+    _, values, vt = np.linalg.svd(near - centre)
+    if values[0] < 2.5 * max(values[1], 1e-6):
+        return None                                    # Not a line.
+    return centre, vt[0]
+
+
 def opening_axis(goal, route, live_map, z_low, z_high, reach=0.9):
     """Square an opening to its wall: fit a line to the wall above it (solid
     across the whole width there), put the goal on that line and set its
     crossing axis to the wall normal. Returns True when it could."""
-    blocked = live_map.blocked(z_low, z_high)
-    cells = np.argwhere(blocked)
-    if len(cells) < 8:
+    cells = np.argwhere(live_map.blocked(z_low, z_high))
+    fit = wall_line(live_map.centre_of(cells), goal.detected, route.direction(goal), reach, 8)
+    if fit is None:
         return False
-    xy = live_map.centre_of(cells)
-    near = xy[np.linalg.norm(xy - goal.detected, axis=1) < reach]
-    if len(near) < 8:
-        return False
-    centre = near.mean(axis=0)
-    _, values, vt = np.linalg.svd(near - centre)
-    if values[0] < 2.5 * max(values[1], 1e-6):
-        return False                                   # Not a line.
-    along = vt[0]
+    centre, along = fit
     normal = np.array([-along[1], along[0]])
     if normal @ route.direction(goal) < 0:
         normal = -normal
