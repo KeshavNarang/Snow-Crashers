@@ -63,3 +63,12 @@ px4_link false. Sim now runs --colour --camera-hz 3.0 --camera-latency 0.4.
 - Next drone session (~15 min): verify RGBSTEREO + PX4 fusion after 5 min; stereo_node rate and
   age with colour on (needs >= 3 Hz); dist_bottom present; mat held in view; then fly cheese
   (tools/fly deploy NAME cheese), then the full course.
+
+## 2026-11-08 00:20-00:30 (USB, read-only; lock not taken, another test was queued)
+
+- RGBSTEREO restore confirmed. PX4 link came up after a flight-controller power-cycle.
+- PX4 fuses VIO: cs_ev_pos/yaw true, xy_valid true, vision 62-105 ms old; cs_rng_hgt true.
+- Jetson depth (overwall stereo_depth, same StereoRig): 3.15 Hz, age 88-400 ms, colour 9.1 Hz,
+  cuVSLAM 32 Hz, load ~5.5. Sim assumption (2.8 Hz, 0.4 s) holds.
+- goalnav's stereo_node could not be run: drone_ref is not built in the current workspace.
+- Return spot: M1 offset 0.70 m (halfway to the west net); sim v9 tips 0.21 m off the net.
