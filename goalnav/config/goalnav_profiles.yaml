@@ -14,7 +14,7 @@
 
 safe:                     # reliability first: the run that must finish
   cruise_height: 1.15     # over the stands' struts; below the 1.73 m wall tops
-  max_speed: 0.6
+  max_speed: 0.4         # slow: Jetson depth ~3-4 Hz, 0.4 s old (2026-11-07); was 0.6
   radius: 0.42
   hard_radius: 0.33       # body + 5 cm: the map is a few cm off a real tarp
   soft: 0.80

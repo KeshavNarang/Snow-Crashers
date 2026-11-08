@@ -2,8 +2,8 @@
 
 Climb to 2.25 m, cross the barrier, find the H mat in the colour image, land and disarm on it.
 No return. The pilot arms on Altitude, then switches to Position (flight_interface enters
-Offboard); goalnav never arms. Needs colour (team image: RGBSTEREO) and a depth source: on-camera depth costs
-PX4 its VIO fusion on skybeta-03 (agents/logs/2026-11-07-overwall-pad.md); not yet resolved.
+Offboard); goalnav never arms. Colour from the RGBSTEREO image, depth from stereo_node on the Jetson
+(goalnav.launch.py defaults: on-camera depth cost PX4 its VIO fusion on skybeta-03).
 Pick it with ~/team_ws/run_mission.sh drone_ref cheese.launch.py (tools/fly deploy NAME cheese).
 test/test_cheese_launch.py keeps ARGS equal to run.sh.
 """
