@@ -57,6 +57,7 @@ STEREO_RANGE = (0.2, 6.0)
 # 1920 wide: 66.3 deg. Rendered small for the renderer's cost; its CameraInfo scales with it.
 COLOUR_SIZE, COLOUR_HFOV = (224, 140), 66.3
 COLOUR_OFFSET = (CAMERA_OFFSET[0], CAMERA_OFFSET[1] - 0.0378, CAMERA_OFFSET[2])
+COLOUR_PITCH_DEG = 27.0          # skybeta-03 TF, base_link -> oak_rgb_camera_optical_frame (2026-11-07)
 
 
 class Recorder:
@@ -408,7 +409,7 @@ def on_mat(pad, xy):
 def colour_camera():
     """The OAK-D's colour camera (at the renderer's size)."""
     return RGBCamera(width=COLOUR_SIZE[0], height=COLOUR_SIZE[1], hfov_deg=COLOUR_HFOV, offset=COLOUR_OFFSET,
-                     pitch_deg=CAMERA_PITCH_DEG)
+                     pitch_deg=COLOUR_PITCH_DEG)
 
 
 def image_messages(camera, image, ns, topic, info_topic, encoding):

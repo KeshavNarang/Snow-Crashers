@@ -111,11 +111,11 @@ JITTER = 1.3
 PAD_AREA = ((-2.35, -0.85), (-NET + 0.45, -1.55))
 PAD_FROM_WINDOW_WALL = 0.80             # mat centre to the wall's centreline (feet, struts, tarp)
 # Three large rocks around the mat (team), anywhere around it: each one's near
-# edge at least 1.3 ft from the H at the mat's centre, and no further than
-# PAD_ROCK_REACH (they are "nearby").
+# edge at least ROCK_CLEAR from the mat's edge (never on the mat; user's hard
+# limit, 1.5 ft), and no further than PAD_ROCK_REACH beyond that ("nearby").
 PAD_ROCKS = 3
-ROCK_CLEAR = 0.40                       # 1.3 ft: no rock's edge nearer the mat's centre than this
-PAD_ROCK_REACH = 1.0
+ROCK_CLEAR = 0.4572                     # 1.5 ft from the mat's square edge to the rock's edge, hard minimum
+PAD_ROCK_REACH = 0.6
 # Around the net (team): the next net 3 ft north (net to net), empty but for a
 # flat blue floor tarp and its PVC frame; the hall's glass wall 8 ft west of the west net.
 NEXT_COURSE_GAP = 0.914
@@ -595,7 +595,7 @@ def validate(course, radius=BODY_RADIUS + 0.05):
     if not getattr(course, 'rocks_placed', True):
         problems.append('a rock found no room')
     for rock in course.boulders:
-        if math.dist(rock['xy'], course.pad[:2]) - rock['radius'] < ROCK_CLEAR:
+        if mat_gap(rock['xy'], rock['radius'], course.pad, course.pad_mat) < ROCK_CLEAR - 1e-6:
             problems.append('a rock beside the mat')
     # Nothing through the net, and the mat far enough in to land on.
     inside = np.vstack([v for name, (v, t) in course.groups.items()
@@ -692,23 +692,36 @@ def _place_pad(sampler, walls, tries=200):
     return (float(centre[0]), float(centre[1]), PAD[2]), (size, yaw)
 
 
-def _rock_spot(sampler, k, pad, reach):
+def mat_gap(centre, radius, pad, pad_mat):
+    """Floor distance from a rock's edge to the mat's square (side, yaw) edge; < 0 overlaps."""
+    side, yaw = pad_mat
+    c, s = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
+    dx, dy = centre[0] - pad[0], centre[1] - pad[1]
+    u, v = abs(c * dx + s * dy) - side / 2, abs(-s * dx + c * dy) - side / 2
+    return math.hypot(max(u, 0.), max(v, 0.)) + min(max(u, v), 0.) - radius
+
+
+def _rock_spot(sampler, k, pad, reach, pad_mat):
     """A rock's radius and centre: B1-B3 within ``reach`` of the full spread
     about their CAD spots, the rest anywhere around the mat, near edge
-    ROCK_CLEAR to PAD_ROCK_REACH from its centre."""
+    ROCK_CLEAR to ROCK_CLEAR + PAD_ROCK_REACH beyond the mat's corner circle
+    (the placement check then holds it ROCK_CLEAR off the mat's square)."""
     rng = sampler.rng
     if k < len(BOULDERS):
         x, y = BOULDERS[k]
         return float(rng.uniform(0.2, 0.3)), np.array([x + reach * float(rng.uniform(-0.35, 0.35)),
                                                        y + reach * float(rng.uniform(-0.35, 0.35))])
     radius = float(rng.uniform(0.24, 0.32))                      # large
-    angle, edge = sampler.u(-math.pi, math.pi, False), sampler.u(ROCK_CLEAR, PAD_ROCK_REACH, False)
+    half = pad_mat[0] / 2
+    angle = sampler.u(-math.pi, math.pi, False)
+    edge = sampler.u(half + ROCK_CLEAR, half * math.sqrt(2) + ROCK_CLEAR + PAD_ROCK_REACH, False)
     return radius, np.asarray(pad[:2]) + (edge + radius) * np.array([math.cos(angle), math.sin(angle)])
 
 
-def _place_boulders(sampler, groups, pad, tries=80, gap=0.05):
+def _place_boulders(sampler, groups, pad, pad_mat, tries=80, gap=0.05):
     """The rocks, each re-drawn until it stands clear of every wall, stand,
     paver, the tunnel and the other rocks, inside the net, and off the mat.
+    A rock that finds no such spot is left out, never placed on the mat.
     Returns them and whether every one found room."""
     rng = sampler.rng
     grid, res, extent = _band_raster(groups, 0.0, 0.6)
@@ -718,14 +731,16 @@ def _place_boulders(sampler, groups, pad, tries=80, gap=0.05):
         for i in range(tries):
             # A rock that cannot stand at its jittered CAD spot (at severity 0 it
             # has none) searches ever further, up to the full spread.
-            radius, centre = _rock_spot(sampler, k, pad, max(sampler.s * JITTER, (i + 1) / tries))
+            radius, centre = _rock_spot(sampler, k, pad, max(sampler.s * JITTER, (i + 1) / tries), pad_mat)
             clear = (np.abs(centre) + radius <= NET - 0.1).all() \
                 and np.hypot(*(solid - centre).T).min() > radius + gap \
                 and all(math.dist(centre, b['xy']) > radius + b['radius'] + gap for b in boulders) \
-                and math.dist(centre, pad[:2]) - radius >= ROCK_CLEAR
+                and mat_gap(centre, radius, pad, pad_mat) >= ROCK_CLEAR
             if clear:
                 break
         placed_all &= bool(clear)
+        if not clear:
+            continue
         height = float(rng.uniform(0.45, 0.5334))        # CAD: 21 in at most
         groups[f'Boulder {k + 1}'] = mm.rock(tuple(centre), radius, height, rng)
         boulders.append({'xy': [float(c) for c in centre], 'radius': radius, 'height': height})
@@ -764,7 +779,7 @@ def _sample(seed, severity, layout=None, ladder=True, ladder_pose=None):
         groups.update(ml.ladder(centre, yaw))
         ladder_info = {'pose': pose, 'centre': list(centre), 'yaw_deg': yaw, 'top_z': ml.TOP_Z, 'spread': ml.SPREAD,
                        'base_width': ml.BASE_WIDTH, 'clear': clear}
-    boulders, rocks_placed = _place_boulders(sampler, groups, pad)
+    boulders, rocks_placed = _place_boulders(sampler, groups, pad, pad_mat)
     groups['Floor'] = (np.array([[-NET, -NET, -0.01], [NET, -NET, -0.01], [NET, NET, -0.01], [-NET, NET, -0.01]]),
                        np.array([[0, 1, 2], [0, 2, 3]]))
     # Each net a few cm off the CAD's, but never inside what stands against it.

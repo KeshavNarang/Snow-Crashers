@@ -36,11 +36,16 @@ class Pose:
     centre: tuple                # footprint centre, course frame (m)
     yaw_deg: float               # rear feet -> front (step) feet, CCW from +x
     source: str
+    wall_y: float = None         # a wall north of it (y of its centreline), and
+    max_wall_gap: float = None   # at most this from the wall to the ladder's nearest foot
 
 
 POSES = {
     # Between the barrier's first panel and the mat (agents/logs/2026-11-07-ladder.md).
-    'original': Pose((-2.31, -0.62), 16., 'photos/Ladder_*.jpg, 2026-11-07'),
+    # The team (2026-11-07 evening): no more than 1.5 ft from the barrier behind the drone at
+    # the start (barrier panel 1 centreline y ~0.36 at x -2.31); the photo fit put it at y -0.62.
+    'original': Pose((-2.31, -0.25), 16., 'photos/Ladder_*.jpg + team correction, 2026-11-07',
+                     wall_y=0.36, max_wall_gap=0.4572),
     # In the south-west net corner, rear feet ~0-5 cm off the nets ("Moved" in the log).
     'moved': Pose((-2.80, -2.50), 92.7, 'photos/New_Ladder_1/2.jpeg, 2026-11-07'),
 }
@@ -138,6 +143,15 @@ def _inside_net(groups):
     return bool((np.abs(v[:, :2]) <= NET + NET_TOLERANCE).all())
 
 
+def _near_wall(base, centre, yaw):
+    """True unless the pose has a wall limit and its nearest foot is further from that wall."""
+    if base.max_wall_gap is None:
+        return True
+    c, s = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
+    top = max(centre[1] + a * SPREAD / 2 * s + b * BASE_WIDTH / 2 * c for a in (-1, 1) for b in (-1, 1))
+    return base.wall_y - top <= base.max_wall_gap
+
+
 def place(rng, spread, groups, raster, pose=DEFAULT_POSE, tries=40, slide=0.20):
     """A pose (centre, yaw_deg, clear) near ``POSES[pose]`` that touches
     nothing in ``groups`` and stays inside the nominal net (``NET_TOLERANCE``).
@@ -165,6 +179,8 @@ def place(rng, spread, groups, raster, pose=DEFAULT_POSE, tries=40, slide=0.20):
             if np.linalg.norm(d) <= slide + 1e-9]
     for grid, z0 in ((full, 0.0), (above, STAND_FEET_Z)):
         for centre, yaw in jittered + slid:
+            if not _near_wall(base, centre, yaw):
+                continue
             mesh = ladder(centre, yaw)
             if _inside_net(mesh) and not (raster(mesh, z0, TOP_Z + 0.05)[0] & grid).any():
                 return (float(centre[0]), float(centre[1])), float(yaw), True
