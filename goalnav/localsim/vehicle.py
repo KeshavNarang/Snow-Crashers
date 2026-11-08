@@ -82,6 +82,12 @@ class VehicleConfig(AeroConfig):
     noise_m: float = 0.004
     drift_m_per_sqrt_s: float = 0.004
     yaw_drift_rad_per_sqrt_s: float = 0.0005
+    # Visual-odometry fusion lapses (skybeta-03, 2026-11-08: PX4 fused vision 60 % of a 30 s sample
+    # with goalnav loading the Jetson). In a lapse PX4 dead-reckons: a velocity error random-walks
+    # and the position walks off; when vision returns the estimator resets to it. 0: none.
+    vio_lapse_per_min: float = 0.
+    vio_lapse_s: tuple = (0.5, 2.0)
+    lapse_velocity_walk: float = 0.15        # m/s per sqrt(s) while dead reckoning
     range_min_m: float = 0.10
     range_bitfield: int = 0      # The lab reported 0; 1 means rangefinder fused.
     battery_drain_per_s: float = 0.0025
@@ -122,6 +128,8 @@ class Vehicle:
         self.armed_at, self.flew = 0., False
         self.frame_origin, self.frame_yaw = self.p.copy(), yaw
         self.drift = np.zeros(3)
+        self.lapse, self.lapse_v = np.zeros(3), np.zeros(3)     # dead-reckoning error in a lapse
+        self.in_lapse, self.lapse_until, self.lapses = False, 0., []
         self.yaw_drift = 0.
         self.events = []
         bus.subscribe('/fmu/in/offboard_control_mode', self._mode)
@@ -211,7 +219,7 @@ class Vehicle:
             position = np.asarray(self.setpoint.position, float)
             if np.all(np.isfinite(position)):
                 # PX4 position loop on its own (drifting) estimate.
-                estimate = self._to_local(self.p - self.frame_origin + self.drift)
+                estimate = self._to_local(self.p - self.frame_origin + self.estimated())
                 gains = np.array([cfg.pos_p, cfg.pos_p, cfg.z_pos_p])
                 target_v = target_v + self._from_local(gains * (position - estimate))
             feedforward = self._from_local(np.nan_to_num(np.asarray(self.setpoint.acceleration, float)))
@@ -271,6 +279,27 @@ class Vehicle:
         root = math.sqrt(dt)
         self.drift += self.rng.normal(0., cfg.drift_m_per_sqrt_s * root, 3) * (not self.landed)
         self.yaw_drift += self.rng.normal(0., cfg.yaw_drift_rad_per_sqrt_s * root) * (not self.landed)
+        self.lapse_step(dt)
+
+    def lapse_step(self, dt):
+        """Start, grow or end a vision-fusion lapse (``vio_lapse_per_min``); the estimate carries
+        ``lapse`` on top of the drift (``estimated``)."""
+        cfg, now_s = self.cfg, self.bus.seconds
+        if self.in_lapse and now_s >= self.lapse_until:
+            self.in_lapse = False
+            self.lapse[:], self.lapse_v[:] = 0., 0.          # vision back: the estimator resets to it
+        if not self.in_lapse and cfg.vio_lapse_per_min > 0 and not self.landed \
+                and self.rng.random() < cfg.vio_lapse_per_min / 60. * dt:
+            self.in_lapse = True
+            self.lapse_until = now_s + float(self.rng.uniform(*cfg.vio_lapse_s))
+            self.lapses.append(round(now_s, 2))
+        if self.in_lapse:
+            self.lapse_v[:2] += self.rng.normal(0., cfg.lapse_velocity_walk * math.sqrt(dt), 2)
+            self.lapse += self.lapse_v * dt
+
+    def estimated(self):
+        """PX4's position estimate error: the slow drift plus any lapse."""
+        return self.drift + self.lapse
 
     def _ground_contact(self, now_s, dt):
         """Floor contact. A disarmed drop keeps its horizontal speed and slides
@@ -312,7 +341,7 @@ class Vehicle:
             return False
         position, velocity, acceleration = (np.asarray(getattr(self.setpoint, k), float)
                                             for k in ('position', 'velocity', 'acceleration'))
-        estimate = self._to_local(self.p - self.frame_origin + self.drift)
+        estimate = self._to_local(self.p - self.frame_origin + self.estimated())
         return bool((math.isfinite(position[2]) and position[2] < estimate[2])
                     or (math.isfinite(velocity[2]) and velocity[2] < 0.)
                     or (math.isfinite(acceleration[2]) and acceleration[2] < 0.))
@@ -422,7 +451,7 @@ class Vehicle:
         cfg = self.cfg
         us = self.bus.ns // 1000
         noise = cfg.noise_m if not self.landed else min(cfg.noise_m, 0.004)
-        estimate = self._to_local(self.p - self.frame_origin + self.drift) + self.rng.normal(0., noise, 3)
+        estimate = self._to_local(self.p - self.frame_origin + self.estimated()) + self.rng.normal(0., noise, 3)
         velocity = self._to_local(self.v) + self.rng.normal(0., 0.003, 3)
         height = self.p[2] - self.ground + 0.0007
         # The downward laser's reading (goalrun sets it), as PX4 passes it on in dist_bottom.
