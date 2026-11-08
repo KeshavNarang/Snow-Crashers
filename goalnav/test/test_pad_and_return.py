@@ -67,5 +67,35 @@ class ReturnSpotMidwayNetAndM1(unittest.TestCase):
             self.assertAlmostEqual(offset, mid - net_x, delta=0.05, msg=f'M1 swung {swing} deg')
 
 
+class ReturnStaysOverTheWallsNearThem(unittest.TestCase):
+    """localsim seed 602 (severity 0.7, near ladder, 2026-11-08): on the way down the body overlapped
+    the barrier stand by 9.5 cm at (-2.47, 0.59, 0.81), 0.23 m past the barrier's centreline: the
+    return's height came from the live map, built at takeoff and drifted since. Near a return wall
+    (known lines: barrier, M1) the feet must stay over the wall top; at the touchdown spot (0.70-0.725 m
+    off them) it may come down."""
+
+    BARRIER = ((-2.90, 0.324), (-2.15, 0.402))
+
+    def test_0_23_m_past_the_barrier_holds_over_the_wall_top(self):
+        from drone_ref.goalnav.homeward import wall_floor
+        floor = wall_floor([(-2.47, 0.59)], [self.BARRIER], feet_below_origin=0.07)
+        self.assertGreaterEqual(floor, 1.73 + 0.07 + 0.15)
+
+    def test_a_spot_measured_too_close_is_pushed_back(self):
+        """Seed 602 again, after the floor rule: the touchdown spot itself sat 0.34 m from the barrier
+        (the wall measurement moved it 0.11 m toward it) and the props touched on the way down."""
+        from drone_ref.goalnav.homeward import keep_off, WALL_CLEAR
+        x, y = keep_off((-2.52, 0.69), [self.BARRIER])
+        a, b = self.BARRIER
+        d = abs((b[0] - a[0]) * (a[1] - y) - (a[0] - x) * (b[1] - a[1])) / math.hypot(b[0] - a[0], b[1] - a[1])
+        self.assertGreater(d, WALL_CLEAR)
+
+    def test_at_the_touchdown_spot_it_may_come_down(self):
+        from drone_ref.goalnav.homeward import wall_floor
+        spot = (-2.55, 0.36 + 0.725)
+        self.assertEqual(wall_floor([spot], [self.BARRIER], feet_below_origin=0.07), 0.)
+
+
+
 if __name__ == '__main__':
     unittest.main()

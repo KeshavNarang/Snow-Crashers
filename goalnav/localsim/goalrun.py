@@ -54,7 +54,7 @@ POINTS_TOPIC = '/goalnav/stereo/points'
 # OAK-D's own depth (it cost PX4 its VIO fusion on skybeta-03).
 SIM_CAMERAS = {
     'rgbstereo': {'hz': 4.5, 'latency': 0.13,
-                  'goalnav': {'depth_topic': '', 'points_topic': POINTS_TOPIC,
+                  'goalnav': {'depth_topic': '', 'points_topic': POINTS_TOPIC, 'image_topic': '',
                               'pad_image_topic': RGB_TOPIC, 'pad_info_topic': RGB_INFO_TOPIC}},
     'rgbd': {'hz': 10., 'latency': 0.1,
              'goalnav': {'depth_topic': DEPTH_TOPIC, 'points_topic': '',
@@ -403,7 +403,7 @@ def fly(args, bus, world, camera, vehicle, mission, referee, recorder, meta, rng
             'touches': len(summary['touch_events']), 'touch_events': summary['touch_events'][:20],
             'strict': summary['strict'], 'crashed': summary['crashed'],
             'ground_contact': summary['ground_contact'], 'return': summary['return'],
-            'net_touches': info.get('net_touches', [])[:20], 'events': mission.status.events,
+            'net_touches': info.get('net_touches', [])[:20], 'vio_lapses': vehicle.lapses[:60], 'events': mission.status.events,
             'pad_landing': info.get('pad_landing'),
             'vehicle_events': vehicle.events[-30:], 'rest_xy': summary['rest_xy'],
             'floor_tracker': {'accepted': mission.floor.accepted if mission.floor else 0,

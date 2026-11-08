@@ -119,3 +119,37 @@ class DescentGate:
             self.held_s += dt
             return 0.
         return going
+
+
+WALL_TOP = 1.73          # panels and the barrier (localsim WALL_H)
+WALL_CLEAR = 0.57        # from a wall's centreline: half the panel 0.03 + rotor tips 0.29 + 0.15 + drift 0.10
+WALL_MARGIN = 0.15       # feet over the wall top while that close
+
+
+def wall_floor(points, lines, feet_below_origin, clear=WALL_CLEAR, top=WALL_TOP, margin=WALL_MARGIN):
+    """Lowest body height (over the floor) for ``points`` near the known wall ``lines`` (segments, the
+    frame the points are in): feet ``margin`` over ``top`` within ``clear`` of any of them, else 0.
+    The return's map-made height profile let it down 0.23 m past the barrier (localsim seed 602)."""
+    for p in points:
+        for a, b in lines:
+            ax, ay, bx, by, px, py = a[0], a[1], b[0], b[1], p[0], p[1]
+            dx, dy = bx - ax, by - ay
+            u = max(0., min(1., ((px - ax) * dx + (py - ay) * dy) / max(dx * dx + dy * dy, 1e-12)))
+            if ((px - ax - u * dx) ** 2 + (py - ay - u * dy) ** 2) ** 0.5 < clear:
+                return top + feet_below_origin + margin
+    return 0.
+
+
+def keep_off(spot, lines, clear=WALL_CLEAR + 0.05):
+    """``spot`` moved straight away from each wall line it is within ``clear`` of. The touchdown spot
+    follows walls measured on the way back, and one measurement put it 0.34 m from the barrier
+    (localsim seed 602); the known lines bound it whatever is measured."""
+    x, y = float(spot[0]), float(spot[1])
+    for a, b in lines:
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        u = max(0., min(1., ((x - a[0]) * dx + (y - a[1]) * dy) / max(dx * dx + dy * dy, 1e-12)))
+        cx, cy = a[0] + u * dx, a[1] + u * dy
+        d = ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5
+        if 1e-9 < d < clear:
+            x, y = cx + (x - cx) * clear / d, cy + (y - cy) * clear / d
+    return x, y
