@@ -1,12 +1,15 @@
 # Snow Crashers: agent guide
 
+**Current project guidance:** start at [docs/README.md](docs/README.md).
+[docs/STATUS.md](docs/STATUS.md) supersedes stale deployment, camera and competition-rule claims below.
+
 Stanford DroneHacks 2026 entry. Read `README.md` (human notes, scoring), `THOUGHTS.md`,
 `goalnav/README.md` and `goalnav/docs/GOALNAV.md` first. Official rules:
 `goalnav/docs/organizer/`. Don't edit `README.md` (human-owned). Use git, not jj.
 
-## Current focus: the auxiliary sensor (SENSOR WORKSTREAM)
+## Auxiliary sensor workstream (historical competition constraints)
 
-We are adding **one auxiliary sensor** (rule 4: < US$100 market value, < 50 g, powered from the
+The original auxiliary-sensor plan used **one auxiliary sensor** (historical rule 4: < US$100 market value, < 50 g, powered from the
 drone battery, declared at inspection with part number, price link and mass; no GNSS, no
 off-drone beacons, no lasers above Class 1) to win "technically impressive" points and help
 the course. Sensor choice/status lives in `agents/sensor/README.md`. If you are a session
@@ -14,7 +17,17 @@ touching sensor code, mounts, drivers or fusion, read that first and log your wo
 
 ## Live pipeline
 
-The pipeline that actually flies on skybeta-03 is `team_ws/src/overwall_nav` (and `snowcrashers_nav`), run through the organizers' `flight_interface`. `goalnav/` is simulator-only so far. Depth is computed on the Jetson CPU from the mono pair (about 3 Hz, ~0.4 s old); see `agents/logs/2026-11-07-depth-bottleneck.md`.
+The user confirms several successful simple `snowcrashers_nav` flights; wall crossing is also reported in the logs. Goalnav was deployed and bench-run props-off, but a successful goalnav course/cheese flight is not established. A newer branch records a team image with on-camera depth (~28 Hz), replacing earlier CPU-stereo assumptions. See [current status](docs/STATUS.md) and [camera contracts](docs/CAMERAS.md); verify the live configuration before deployment.
+
+## Required RGB for pad finding
+
+**Real RGB is non-negotiable for the pad mission. The user confirms enabling
+RGB is allowed under competition rules.** Do not treat old organizer-permission
+claims as a blocker, or ship mono/depth-only as a ready pad mission. Resolve
+VIO/performance issues with RGB retained. Never fake RGB-sensor values, images,
+calibration, timestamps or detection results. Report missing/stale data honestly;
+simulation images must be clearly identified and never used as live evidence.
+See [docs/CAMERAS.md](docs/CAMERAS.md#required-for-the-real-pad-mission).
 
 ## Evals first (the workflow)
 
@@ -124,8 +137,7 @@ the hostname does not resolve, say so; do not guess other hosts.
 - Props off on the bench. A human with RC kill switch watches every flight.
 - Never run two missions/controllers at once; don't publish to `/fmu/in/*` directly (see
   `skybetav1/docs/competitor_guide.md`).
-- Rules that affect code: no stored run data fed to later runs (6.4), all compute onboard (5.4),
-  no hard-coded course (hurts generality; an AI code review screens the repo).
+- Competition constraints on stored course data, fixed waypoints and camera-pipeline changes are historical. The user reports organizers are now flexible; follow [current guidance](docs/STATUS.md#current-competition-guidance), rather than blocking the requested shortcut on those old rules. This does not authorize unrelated motor commands or PX4 changes.
 
 ## Working together (multiple agents)
 
