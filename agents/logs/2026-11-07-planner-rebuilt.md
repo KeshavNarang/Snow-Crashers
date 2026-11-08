@@ -75,3 +75,20 @@ the heading now keeps learning all mission.
 2. Let window_front sit inside the fence: place it along the measured axis only as far
    out as the fence allows (0.6-0.9 m), since the window's own axis is measured.
 3. Seed 5: pad not seen (ladder by the lookouts?), not yet looked at.
+
+## Final session (to the 21:30 close): 18/20
+Judge corrected: contacts are counted only before the mission's ON_PAD (trace sim time);
+the referee restarts its clock for the optional return, so return-flight contacts at the
+launch had shown up as "t=0" touches (seeds 5, 9 earlier). Changes kept:
+- window approach 0.9 -> 0.75 m (`WindowConfig.approach`, `window_front` moved to match): the
+  line-up point 0.15 m further from the south net; jambs still in view (0.54 m half-width at
+  0.75 m vs 0.40-0.48). Seeds 12 and 14 now pass the window; every run passes the window.
+- tunnel_exit -0.80 -> -1.05: stay low until clear of the south mouth's hanging tarp.
+- localsim validate: launch floor clearance BODY_RADIUS + 0.01 -> + 0.05 (seed 5's real contact
+  at takeoff).
+
+Seeds 1-20, severity 0.7, RGB pad: **18/20 (90%)**, landed 45.7-66.0 s, no contact before landing.
+Still failing: seed 6 (brushes the north mouth's tarp entering 0.33 m east of centre: the
+entry follows tunnel_inside's estimate) and seed 19 (contact at (1.89, -1.0) heading for
+south_room after the tunnel). Tried and reverted: south_turn heading 200 -> -90 (17/20,
+seed 19 unchanged). 20 seeds cannot tell 90% from 95%: run 40+.
