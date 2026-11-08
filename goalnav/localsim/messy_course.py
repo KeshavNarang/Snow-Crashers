@@ -573,11 +573,12 @@ def validate(course, radius=BODY_RADIUS + 0.05):
     return problems
 
 
-def generate(seed, severity=1.0, attempts=120, ladder=True):
+def generate(seed, severity=1.0, attempts=120, ladder=True, ladder_pose=None):
     """A validated irregular course; severity scales every offset. ``ladder``:
-    the stepladder added to the landing area on 2026-11-07 (localsim.messy_ladder)."""
+    the stepladder added to the course on 2026-11-07 (localsim.messy_ladder),
+    at ``ladder_pose`` (a name in messy_ladder.POSES; None: its DEFAULT_POSE)."""
     for attempt in range(attempts):
-        course = _sample(seed * 1000 + attempt, severity, ladder)
+        course = _sample(seed * 1000 + attempt, severity, ladder, ladder_pose)
         if not validate(course):
             course.seed = seed
             course.attempt = attempt
@@ -653,7 +654,7 @@ def _place_boulders(sampler, groups, pad, tries=80, gap=0.05):
     return boulders, placed_all
 
 
-def _sample(seed, severity, ladder=True):
+def _sample(seed, severity, ladder=True, ladder_pose=None):
     sampler = Sampler(seed, severity)
     rng = sampler.rng
     groups, tunnel = sampler.tunnel()
@@ -670,13 +671,14 @@ def _sample(seed, severity, ladder=True):
             wall.tarp_side = 1 if (np.asarray(pad[:2]) - (a + b) / 2) @ normal > 0 else -1
         groups.update(wall_meshes(wall, rng, (sampler.panel['strut_top'], sampler.panel['strut_out'])))
     groups.update(mf.centre_column(Sampler.barrier_y(joints, mf.CENTRE_X)))
-    ladder_pose = None
+    ladder_info = None
     if ladder:
         # Its own generator; the rocks placed after it still retry around it, which
         # moves the shared generator on, so a seed's nets, launch and later attempts differ.
-        centre, yaw, clear = ml.place(np.random.default_rng((seed, 0x1add)), severity * JITTER, groups, _band_raster)
+        pose = ladder_pose or ml.DEFAULT_POSE
+        centre, yaw, clear = ml.place(np.random.default_rng((seed, 0x1add)), severity * JITTER, groups, _band_raster, pose)
         groups.update(ml.ladder(centre, yaw))
-        ladder_pose = {'centre': list(centre), 'yaw_deg': yaw, 'top_z': ml.TOP_Z, 'spread': ml.SPREAD,
+        ladder_info = {'pose': pose, 'centre': list(centre), 'yaw_deg': yaw, 'top_z': ml.TOP_Z, 'spread': ml.SPREAD,
                        'base_width': ml.BASE_WIDTH, 'clear': clear}
     boulders, rocks_placed = _place_boulders(sampler, groups, pad)
     groups['Floor'] = (np.array([[-NET, -NET, -0.01], [NET, -NET, -0.01], [NET, NET, -0.01], [-NET, NET, -0.01]]),
@@ -698,7 +700,7 @@ def _sample(seed, severity, ladder=True):
     course = Course(seed, severity, groups, walls, tunnel, pad, launch, nets, _clutter(rng, nets),
                     boulders=boulders)
     course.pad_mat = pad_mat
-    course.ladder = ladder_pose
+    course.ladder = ladder_info
     course.rocks_placed = rocks_placed
     course.lines = _lines(walls, tunnel, joints, nets)
     course.guideline = guideline(walls, joints)
