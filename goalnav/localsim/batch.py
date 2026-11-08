@@ -5,7 +5,7 @@
     python3 -m localsim.batch --summarise localsim/out/batch/base     # re-score finished runs
     python3 -m localsim.batch --compare localsim/out/batch/base localsim/out/batch/try
 
-Any other flag (``--assume-colour-pad``, ``--tune k=v``, ``--vehicle f=v``, ...) goes to
+Any other flag (``--camera rgbd``, ``--tune k=v``, ``--vehicle f=v``, ...) goes to
 ``localsim.goalrun`` unchanged.
 
 ``--scenario`` (``localsim/drone_measured.yaml``) sets the depth rate, its age and the
@@ -78,7 +78,9 @@ def scenario_flags(name, path=SCENARIOS):
 
 def launch_default_profile(path=LAUNCH_FILE):
     """The profile the drone flies: the launch file's default (it is started without arguments)."""
-    found = re.search(r"'profile':\s*\('([^']+)'", Path(path).read_text())
+    text = Path(path).read_text()
+    # The launch's argument table, ('profile', 'safe', ...), or the older {'profile': ('safe', ...)}.
+    found = re.search(r"\(\s*'profile'\s*,\s*'([^']+)'", text) or re.search(r"'profile':\s*\('([^']+)'", text)
     if not found:
         raise ValueError(f'no profile default in {path}')
     return found.group(1)
@@ -104,7 +106,7 @@ def provenance(args, extra):
             'scenario_flags': scenario_flags(args.scenario) if args.scenario else [],
             'extra': extra, 'severity': args.severity, 'seeds': args.seeds,
             'deployable': deployable(args.profile, extra),
-            'assume_colour_pad': '--assume-colour-pad' in extra}
+            'camera': extra[extra.index('--camera') + 1] if '--camera' in extra else 'rgbstereo'}
 
 
 # -- running and scoring -----------------------------------------------------------
