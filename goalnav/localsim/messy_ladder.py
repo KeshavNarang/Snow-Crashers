@@ -14,17 +14,41 @@ onto the floor, the four feet fitted as one rectangle. Footprint centre
 +-5 deg, more if the barrier has moved since the scan. The mat in the same
 photos is centred near (-1.94, -1.47), about 0.6 m square.
 
+Later the same day it was moved into the south-west net corner
+(``photos/New_Ladder_1/2.jpeg``): rear legs against the corner, steps facing
+north toward the mat. Both poses are kept in ``POSES``; ``DEFAULT_POSE`` names
+the one every course uses (``goalrun --ladder-pose`` picks another per run).
+Going back is one word: ``DEFAULT_POSE = 'original'``.
+
 ``ladder(centre, yaw)`` returns the mesh groups; ``place`` draws a pose near
-the measured one that stands clear of everything already built.
+the chosen one that stands clear of everything already built.
 """
+from dataclasses import dataclass
 import math
 
 import numpy as np
 
 from localsim import messy_mesh as mm
 
-CENTRE = (-2.31, -0.62)          # footprint centre, course frame (m)
-YAW_DEG = 16.                    # rear feet -> front (step) feet, CCW from +x
+
+@dataclass(frozen=True)
+class Pose:
+    centre: tuple                # footprint centre, course frame (m)
+    yaw_deg: float               # rear feet -> front (step) feet, CCW from +x
+    source: str
+
+
+POSES = {
+    # Between the barrier's first panel and the mat (agents/logs/2026-11-07-ladder.md).
+    'original': Pose((-2.31, -0.62), 16., 'photos/Ladder_*.jpg, 2026-11-07'),
+    # In the south-west net corner, rear feet ~0-5 cm off the nets ("Moved" in the log).
+    'moved': Pose((-2.80, -2.50), 92.7, 'photos/New_Ladder_1/2.jpeg, 2026-11-07'),
+}
+DEFAULT_POSE = 'moved'           # the switch: 'original' puts it back
+NET = 3.048                      # the nets' nominal half-width (messy_course.NET)
+NET_TOLERANCE = 0.03             # a pose may push this far past the nominal net (it stands against it)
+CENTRE = POSES[DEFAULT_POSE].centre
+YAW_DEG = POSES[DEFAULT_POSE].yaw_deg
 TOP_Z = 1.71                     # top of the top cap (measured 1.70-1.71)
 SPREAD = 0.96                    # rear to front foot centres (measured 0.94, spec ~0.98)
 BASE_WIDTH = 0.50                # foot centres across (measured 0.48, spec ~0.50)
@@ -65,7 +89,8 @@ def _stick(p0, p1, along_dir, along, across):
 
 
 def ladder(centre=CENTRE, yaw=YAW_DEG):
-    """{group: (vertices, triangles)}: 'Ladder rails' (fiberglass), 'Ladder top', 'Ladder metal'."""
+    """{group: (vertices, triangles)}: 'Ladder rails' (fiberglass), 'Ladder top', 'Ladder metal'.
+    The default pose is ``DEFAULT_POSE``'s."""
     u, v = _frame(yaw)
     c = np.asarray(centre, float)
     at = lambda du, dv, z: np.array([*(c + u * du + v * dv), z])
@@ -108,31 +133,39 @@ def footprint(centre, yaw, margin=0.):
 STAND_FEET_Z = 0.10              # the stands' battens and pavers are lower than this
 
 
-def place(rng, spread, groups, raster, tries=40, slide=0.20):
-    """A pose (centre, yaw_deg, clear) near the measured one that touches
-    nothing in ``groups``. ``spread`` scales the jitter (severity x JITTER);
-    ``raster(groups, z0, z1)`` -> (grid, res, extent) as messy_course._band_raster.
+def _inside_net(groups):
+    v = np.vstack([g[0] for g in groups.values()])
+    return bool((np.abs(v[:, :2]) <= NET + NET_TOLERANCE).all())
+
+
+def place(rng, spread, groups, raster, pose=DEFAULT_POSE, tries=40, slide=0.20):
+    """A pose (centre, yaw_deg, clear) near ``POSES[pose]`` that touches
+    nothing in ``groups`` and stays inside the nominal net (``NET_TOLERANCE``).
+    ``spread`` scales the jitter (severity x JITTER); ``raster(groups, z0, z1)``
+    -> (grid, res, extent) as messy_course._band_raster.
 
     First a jittered pose clear of everything; failing that (the stands'
     floor battens are drawn generically and the real ladder stands right
-    beside A1's), one clear above the battens; each time the measured pose
+    beside them), one clear above the battens; each time the measured pose
     slid up to ``slide`` m before giving up. ``clear`` is False only if even
     that failed and the measured pose is returned as it is."""
+    base = POSES[pose]
     solid = {k: g for k, g in groups.items() if not k.startswith(('Floor', 'Landing'))}
     full = raster(solid, 0.0, TOP_Z + 0.05)[0]
     above = raster(solid, STAND_FEET_Z, TOP_Z + 0.05)[0]
     jittered = []
     for i in range(tries):
         shrink = 1. - i / tries
-        jittered.append((np.asarray(CENTRE) + rng.uniform(-1, 1, 2) * JITTER_XY * spread * shrink,
-                         YAW_DEG + float(rng.uniform(-1, 1)) * JITTER_YAW * spread * shrink))
+        jittered.append((np.asarray(base.centre) + rng.uniform(-1, 1, 2) * JITTER_XY * spread * shrink,
+                         base.yaw_deg + float(rng.uniform(-1, 1)) * JITTER_YAW * spread * shrink))
     step = 0.05
     offsets = [np.array([dx, dy]) for dx in np.arange(-slide, slide + 1e-9, step)
                for dy in np.arange(-slide, slide + 1e-9, step)]
-    slid = [(np.asarray(CENTRE) + d, YAW_DEG) for d in sorted(offsets, key=np.linalg.norm)
+    slid = [(np.asarray(base.centre) + d, base.yaw_deg) for d in sorted(offsets, key=np.linalg.norm)
             if np.linalg.norm(d) <= slide + 1e-9]
     for grid, z0 in ((full, 0.0), (above, STAND_FEET_Z)):
         for centre, yaw in jittered + slid:
-            if not (raster(ladder(centre, yaw), z0, TOP_Z + 0.05)[0] & grid).any():
+            mesh = ladder(centre, yaw)
+            if _inside_net(mesh) and not (raster(mesh, z0, TOP_Z + 0.05)[0] & grid).any():
                 return (float(centre[0]), float(centre[1])), float(yaw), True
-    return tuple(CENTRE), YAW_DEG, False
+    return tuple(base.centre), base.yaw_deg, False
