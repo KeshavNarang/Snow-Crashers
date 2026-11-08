@@ -1,5 +1,7 @@
 # Goal navigation on a live map, and the photo-matched course simulator
 
+> Design/history reference. For current flight evidence, enabled cameras, adapter branches and competition guidance, read [the central docs](../../docs/README.md). Sensor descriptions and old rule references below are not a live inventory.
+
 The race stack ([RACE.md](RACE.md)) replays a plan computed from the CAD. The
 course as built is not the CAD: walls are feet off, freestanding and can move
 between runs, the net is nearly invisible and everything is tarped. This
@@ -102,7 +104,7 @@ through the organizers' `skybeta_flight_interface`
   image; a colour image for the pad only if `pad_image_topic` names one.
 - **Sees with** `stereo_node`: skybeta-03's camera publishes only the raw
   mono pair (1024x640, 30 Hz) and the IMU, for cuVSLAM: no on-camera depth,
-  no colour. The node matches the pair on the Jetson with overwall_nav's
+  no colour in that original enabled pipeline (the hardware does have a colour sensor). The node matches the pair on the Jetson with overwall_nav's
   `StereoRig` (scale 0.4, SGBM; ~4.5 Hz, ~130 ms old with cuVSLAM running)
   and publishes the points (left camera frame) and the rectified left image.
   It is the only subscriber to the full-size images: a second Python one

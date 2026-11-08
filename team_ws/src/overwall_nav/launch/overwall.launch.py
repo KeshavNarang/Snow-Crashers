@@ -1,4 +1,7 @@
-"""flight_interface (exactly as the organizers' example) + stereo_depth + the over-the-wall mission.
+"""flight_interface (exactly as the organizers' example) + stereo_depth + pad_detect + the mission.
+
+pad_detect needs the colour camera; with the stock camera config it publishes nothing and the
+mission lands at land_beyond_wall_m as before.
 
 What the stack runs with COMPETITOR_PKG=overwall_nav COMPETITOR_LAUNCH=overwall.launch.py
 (~/team_ws/run_mission.sh overwall_nav overwall.launch.py). The test settings (wall height,
@@ -34,6 +37,8 @@ def generate_launch_description():
     )
     depth = Node(package='overwall_nav', executable='stereo_depth', name='stereo_depth',
                  output='screen', emulate_tty=True, parameters=[settings])
+    pad = Node(package='overwall_nav', executable='pad_detect', name='pad_detect',
+               output='screen', emulate_tty=True, parameters=[settings])
     mission = Node(package='overwall_nav', executable='overwall_mission', name='overwall_mission',
                    output='screen', emulate_tty=True, parameters=[settings])
-    return LaunchDescription(declared + [flight_interface, depth, mission])
+    return LaunchDescription(declared + [flight_interface, depth, pad, mission])
