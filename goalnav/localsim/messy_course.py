@@ -72,6 +72,9 @@ LAYOUT = 'rebuilt'
 # - M1, the first wall it goes around, still stands on its barrier joint but is
 #   swung 30-60 degrees from north-south, its free (north) end east.
 M1_TILT_DEG = (30., 60.)
+# - Since 2026-11-08 (team, viewer screenshot): a foot or two between barrier panel 1's east end and
+#   the corner where M1 meets the barrier (about 1 ft), by the start and finish.
+START_CORNER_GAP = 0.3048
 # - M3, the third, is now a short panel standing free ~0.3 m north of the
 #   barrier, swung the same way: its stand's two pavers, on its north-west side,
 #   are at (0.18, 0.97) and (0.64, 1.62) in both overhead photos (2 cm apart),
@@ -388,7 +391,9 @@ class Sampler:
         """The maze as rebuilt on 2026-11-07, from the walls as scanned (by name)."""
         walls = {k: w for k, w in scanned.items() if k != 'M2'}
         m1 = scanned['M1']
-        walls['M1'] = self._swung(m1, m1.pivot, self._middle_out(*M1_TILT_DEG),
+        base = m1.pivot + np.array([START_CORNER_GAP, 0.])          # 1 ft east of panel 1's end, along the barrier
+        base[1] = self.barrier_y(joints, base[0]) + (m1.pivot[1] - self.barrier_y(joints, m1.pivot[0]))
+        walls['M1'] = self._swung(m1, base, self._middle_out(*M1_TILT_DEG),
                                   float(np.linalg.norm(m1.free_end - m1.pivot)))
         centre = np.asarray(M3_CENTRE) + np.array([self.u(-0.1, 0.1), self.u(-0.1, 0.1)])
         from_north = M3_FROM_NORTH_DEG + self.u(-4, 4)
@@ -799,7 +804,7 @@ def _sample(seed, severity, layout=None, ladder=True, ladder_pose=None):
     # The launch mark is taped in the middle of the first corridor (net to M1),
     # its CAD distance north of the barrier.
     m1 = next(w for w in walls if w.name == 'M1')
-    mark_x = (-nets['west'] + m1.pivot[0]) / 2
+    mark_x = (-nets['west'] + joints[1][0]) / 2           # taped between the net and panel 1's end (M1 stands 1 ft past it)
     mark = [mark_x, Sampler.barrier_y(joints, mark_x) + (LAUNCH[1] - BARRIER_Y)]
     # Placed by hand on the taped mark: a few cm off it, the heading by eye.
     launch = {'xy': [mark[0] + sampler.u(-0.06, 0.06, False), mark[1] + sampler.u(-0.06, 0.06, False)],
