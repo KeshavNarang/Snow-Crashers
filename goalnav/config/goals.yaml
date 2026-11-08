@@ -37,10 +37,9 @@ net_half: [3.048, 3.048]      # expected net, centred on the CAD origin
 # barrier's long panel runs 2.67 m south of the north net). Lines are the
 # wall's centreline: the CAD's, or the scan's where it differs.
 # Long straight walls the course heading is measured from (CAD centrelines).
+# As rebuilt (2026-11-07, agents/logs/2026-11-07-walls-rebuilt.md) M1 is swung 30-60
+# degrees, M2 is gone and M3 moved: only the barrier still stands where it was scanned.
 heading_walls:
-  - [[-1.99, 0.55], [-1.84, 2.00]]     # M1 (scan: turned 6 degrees)
-  - [[-0.52, 1.45], [-0.52, 3.00]]     # M2 (scan)
-  - [[1.01, 0.55], [1.01, 2.10]]       # M3 (scan)
   - [[-0.90, 0.382], [0.55, 0.382]]   # the barrier's long panel, north face (scan: the first two are tilted)
 # The return mark, from the launch: [right, ahead] of its heading (m). The
 # launch spot itself: it is the one spot known clear at floor level (below).
@@ -66,19 +65,17 @@ return_face: [-2.00, 0.42]
 # between the west net and M1; keep nearer M1, which the camera sees.
 net_extra: {west: 0.12}
 net_anchors:
-  - {side: west,  wall: [[-1.97, 0.75], [-1.84, 2.00]]}       # M1 (scan)
   - {side: north, wall: [[-0.90, 0.382], [0.55, 0.382]]}      # the barrier's long panel (scan)
 
 goals:
   - {id: corridor_1,     kind: waypoint, at: [-2.53, 1.75],  heading: 90,  across: 0.30, along: 0.3}
-  - {id: first_corridor, kind: reach,    at: [-2.50, 2.66],  heading: 90,  across: 0.10, along: 0.45, checkpoint: CP1, line_turn: right, turn_to_net: 0.463}
-  - {id: m1_end,         kind: gap,      at: [-2.02, 2.62],  heading: 0,   across: 0.30, along: 0.3}
-  - {id: corridor_2_top, kind: waypoint, at: [-1.27, 2.30],  heading: -90, across: 0.30, along: 0.3}
-  - {id: corridor_2,     kind: waypoint, at: [-1.27, 1.45],  heading: -90, across: 0.30, along: 0.3}
-  - {id: m2_end,         kind: gap,      at: [-0.52, 0.98],  heading: 0,   across: 0.30, along: 0.3}
-  - {id: corridor_3,     kind: waypoint, at: [0.24, 1.45],   heading: 90,  across: 0.30, along: 0.3}
-  - {id: corridor_3_top, kind: waypoint, at: [0.24, 2.30],   heading: 90,  across: 0.30, along: 0.3}
-  - {id: gate_a,         kind: gap,      at: [1.10, 2.62],   heading: 0,   across: 0.30, along: 0.0, checkpoint: CP2}
+# As rebuilt (2026-11-07): round M1's free end (swung 30-60 degrees east, so it ends
+# between (-1.21, 1.84) and (-0.62, 1.25)) south of the long panel now across the
+# corridor's north end (y ~2.67, its stand's feet toward the corridor), then east
+# north of M3 (a short panel, its north end near (0.95, 1.5)) to the tunnel.
+  - {id: corridor_1_top, kind: waypoint, at: [-2.45, 2.05],  heading: 60,  across: 0.25, along: 0.3}
+  - {id: m1_end,         kind: gap,      at: [-1.30, 2.12],  heading: 0,   across: 0.25, along: 0.3}
+  - {id: north_run,      kind: waypoint, at: [0.20, 2.25],   heading: 0,   across: 0.35, along: 0.4}
   - {id: east_room,      kind: waypoint, at: [1.80, 2.25],   heading: -35, across: 0.40, along: 0.4}
   - {id: tunnel_entry,   kind: tube,     at: [2.20, 1.75],   heading: -90, across: 0.40, along: 0.3, height: 0.8, anchor: tunnel_inside}
   - {id: tunnel_inside,  kind: tube,     at: [2.20, 0.46],   heading: -90, across: 0.40, along: 0.4, height: 0.8}
