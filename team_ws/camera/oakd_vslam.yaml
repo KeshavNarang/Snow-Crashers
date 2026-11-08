@@ -6,7 +6,7 @@
     driver:
       i_enable_ir: false
     pipeline_gen:
-      i_pipeline_type: depth
+      i_pipeline_type: rgbd           # colour is required for the pad; tools/fly check wants rgbd
       i_enable_imu: true
       i_nn_type: none
     left:
