@@ -19,6 +19,7 @@ from launch.actions import DeclareLaunchArgument, ExecuteProcess, OpaqueFunction
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 # The flight interface's arguments: the organizers' example, but the altitude clamp lowered to 2.5 m for the net.
 INTERFACE = [
@@ -34,6 +35,9 @@ INTERFACE = [
 # goalnav's own arguments.
 GOALNAV = [
     ('profile', 'safe', 'risk profile, config/goalnav_profiles.yaml'),
+    ('goals_file', 'config/goals.yaml', 'the goal chain (relative: installed share/drone_ref)'),
+    ('image_topic', '/oak/left/image_mono', 'image for floor tape and pad: /oak/rgb/image_raw for colour'),
+    ('image_info_topic', '/oak/left/camera_info', 'its CameraInfo: /oak/rgb/camera_info for colour'),
     ('tuning', '', 'YAML overrides, e.g. "{stop_after: corridor_1, max_speed: 0.4}"'),
     ('log_dir', '~/team_ws/logs', 'one folder per launch is made in here'),
     ('record', 'true', 'record the rosbag'),
@@ -75,6 +79,8 @@ def generate_launch_description():
     )
     goalnav = Node(package='drone_ref', executable='goalnav_node', name='drone_ref_goalnav',
                    output='screen', emulate_tty=True,
-                   parameters=[{'profile': LaunchConfiguration('profile'), 'tuning': LaunchConfiguration('tuning')}])
+                   parameters=[{name: ParameterValue(LaunchConfiguration(name), value_type=str) for name in
+                                ('profile', 'tuning', 'goals_file', 'image_topic', 'image_info_topic')}])
+    # value_type=str: launch would otherwise read tuning's '{...}' as a YAML dict, not the string the node parses.
     # The logger first: ROS_LOG_DIR must be set before the nodes start so they log into this run's folder.
     return LaunchDescription(declared + [OpaqueFunction(function=_logger), flight_interface, goalnav])
