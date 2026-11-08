@@ -37,9 +37,9 @@ a known landing search area and rendered colour. It reported a 5.5 cm landing
 error and zero contacts. It did not validate the rebuilt course, actual colour
 pipeline, real mat detector or hardware launch. It skipped the course checkpoints.
 
-[LOCAL_SIM.md](../goalnav/docs/LOCAL_SIM.md) is a historical guide to the former
-race stack. It cites missing mission/vision modules, configurations and tuning
-tools. Its old timing tables and PX4 SITL results do not qualify current goalnav.
+The former race stack and its guide (`goalnav/docs/LOCAL_SIM.md`) were removed on
+2026-11-07: no race or fast modes, we play it safe. `localsim/run.py --px4` remains
+for PX4 SITL.
 [Organizer AI_CONTEXT.md](../goalnav/docs/organizer/AI_CONTEXT.md) describes a
 separate lab simulator; its ROS version, topics and arming example are not the
 hardware deployment contract. [The Isaac/Pegasus spike](../skybetav1/sim/README.md)
