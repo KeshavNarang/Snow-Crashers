@@ -297,7 +297,7 @@ def to_json(r):
                           'stack': m['stack'], 'cores': round(p['cores'], 3), 'peak': round(p['peak'], 3),
                           'top_thread': p['top'][0], 'top_thread_cores': round(p['top'][1], 3)})
     procs.sort(key=lambda x: -x['cores'])
-    return {'time': time.strftime('%Y-%m-%dT%H:%M:%S'), 'ncpu': NCPU, 'cpu_pct': round(sum(r['cores']) / NCPU, 1),
+    return {'time': time.strftime('%Y-%m-%dT%H:%M:%S'), 'epoch': round(time.time(), 3), 'ncpu': NCPU, 'cpu_pct': round(sum(r['cores']) / NCPU, 1),
             'core_pct': [round(x, 1) for x in r['cores']], 'core_peak': [round(x, 1) for x in r['peak']],
             'run_queue': round(r['run'], 1), 'misc': r['misc'], 'procs': procs[:15], 'verdict': verdict(r)}
 
