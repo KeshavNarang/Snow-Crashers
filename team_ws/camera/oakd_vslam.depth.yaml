@@ -1,0 +1,53 @@
+# NOT ACTIVE. James's config (on-camera depth + colour, for goalnav). On skybeta-03 2026-11-07 PX4
+# stopped fusing VIO with it (agents/logs/2026-11-07-overwall-pad.md). To use it, copy it over
+# oakd_vslam.yaml, host/run.sh build, power-cycle, and check PX4 position (preflight.sh) before flying.
+
+# Team camera config for skybeta-03: the organizers' oakd_vslam.yaml (pair + IMU for
+# cuVSLAM, unchanged) plus on-camera stereo depth and the colour camera for goalnav.
+# Installed over the stack's copy by team_ws/Dockerfile (host/run.sh build).
+/oak:
+  ros__parameters:
+    driver:
+      i_enable_ir: false
+    pipeline_gen:
+      i_pipeline_type: depth
+      i_enable_imu: true
+      i_nn_type: none
+    left:
+      i_publish_topic: true
+      i_enable_lazy_publisher: false   # cuVSLAM subscribes late; publish from t=0
+      i_width: 1024                    # must match oakd_vslam.launch.py IMAGE_WIDTH/HEIGHT
+      i_height: 640
+      i_fps: 30.0
+    right:
+      i_publish_topic: true
+      i_enable_lazy_publisher: false
+      i_width: 1024
+      i_height: 640
+      i_fps: 30.0
+    stereo:
+      i_publish_topic: true
+      i_enable_lazy_publisher: false
+      i_depth_preset: DEFAULT
+      i_aligned: false                 # depth in the stereo frame, not resampled to colour
+      i_board_socket_id: 1             # ...and its camera_info/frame the left camera's (default: CAM_A, colour)
+      i_width: 640                     # 29.4 Hz measured at 640x400 (depth_test.py)
+      i_height: 400
+      i_set_input_size: true           # match on 640x400 copies of the pair: on the full 1024x640
+      i_input_width: 640               # pair depth ran at 25 Hz and dragged the pair to 27.7
+      i_input_height: 400
+    rgb:
+      i_publish_topic: true
+      i_enable_lazy_publisher: false
+      i_width: 640
+      i_height: 400
+      i_fps: 10.0
+    imu:
+      i_acc_freq: 200
+      i_gyro_freq: 200
+      i_message_type: IMU
+      i_sync_method: LINEAR_INTERPOLATE_ACCEL
+      i_batch_report_threshold: 1
+      i_max_batch_reports: 10
+      i_enable_rotation: false
+      i_enable_mag: false
