@@ -59,11 +59,17 @@ class LaunchLikeOverwall(unittest.TestCase):
             self.assertEqual(_keyword_source(goal, key, self.goal_src), _keyword_source(wall, key, self.wall_src), key)
         self.assertNotIn('condition', [k.arg for k in goal.keywords], 'always started, as in overwall')
 
-    def test_runs_goalnav_and_no_depth_of_its_own(self):
+    def test_depth_from_the_mono_pair_on_the_jetson(self):
+        """skybeta-03, 2026-11-07 23:49: with on-camera depth (rgbd) vision reached PX4 665 ms old
+        (timestamp - timestamp_sample), estimator cs_ev_pos false, xy_valid false: no position.
+        The RGBSTEREO image fuses, so depth comes from goalnav's stereo_node on the Jetson."""
         calls = _node_calls(self.goal)
         self.assertIn('goalnav_node', calls)
-        self.assertNotIn('stereo_node', calls)        # the camera computes depth now
-        self.assertNotIn('stereo_depth', calls)       # nor overwall's CPU stereo
+        self.assertIn('stereo_node', calls)
+        self.assertNotIn('stereo_depth', calls)       # not overwall's CPU stereo as well
+        defaults = {name: default for name, default, _ in _assigned(self.goal, 'GOALNAV')}
+        self.assertEqual(defaults.get('points_topic'), '/goalnav/stereo/points')
+        self.assertEqual(defaults.get('depth_topic'), '')    # the image has no on-camera depth
 
     def test_entry_is_generate_launch_description(self):
         names = [n.name for n in self.goal.body if isinstance(n, ast.FunctionDef)]
