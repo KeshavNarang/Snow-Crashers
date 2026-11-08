@@ -6,10 +6,11 @@
 #   tools/fly check                  both health checks: the organizers' doctor, then our pre-flight
 #                                    (props off, on the launch mark), then goalnav's status
 #   tools/fly bench                  goalnav bench check, props off, read-only (~1 min): GO / NO-GO
-#   tools/fly logs                   copy the newest flight log folder to ./flight-logs/
+#   tools/fly logs [list|<folder>]   copy a flight's log folder to ./flight-logs/ (newest by default),
+#                                    check it arrived complete, then summarise it (tools/postflight.py)
 #   tools/fly done                   put Luke's overwall_nav back (asks sudo) and release the lock
 set -euo pipefail
-root="$(cd "$(dirname "$0")/.." && pwd)"; d="$root/tools/drone"; cd "$root"
+root="$(cd "$(dirname "$0")/.." && pwd)"; d="${FLY_DRONE:-$root/tools/drone}"; cd "$root"
 # Ask for the drone password once (unless .secrets/skybeta-03.env exists); kept in memory only.
 if [ -z "${DRONE_PASS:-}" ] && [ ! -f .secrets/skybeta-03.env ]; then
   read -rsp "skybeta-03 password (user dronehacks, from the organizers): " DRONE_PASS </dev/tty; echo >&2
@@ -61,9 +62,43 @@ case "${1:-}" in
     echo; echo "Expected with goalnav: pre-flight 'mission' (names drone_ref), 'pad_detect' and 'wall depth rate'"
     echo "(overwall_nav's nodes) FAIL. Everything else, and the doctor, should PASS. Camera must be RGBSTEREO." ;;
   logs)
-    last=$("$d" run 'ls -t ~/team_ws/logs | grep -vx overwall | head -1')   # overwall_nav logs to its own subfolder
-    mkdir -p flight-logs && "$d" pull "~/team_ws/logs/$last" "flight-logs/" \
-      && echo "saved flight-logs/$last; summary: python3 tools/postflight.py flight-logs/$last" ;;
+    # Flight folders on the drone: ~/team_ws/logs/<date-time>/ (overwall_nav logs to its own subfolder).
+    out="${FLY_LOGS_DIR:-flight-logs}"
+    sel="${2:-newest}"
+    if [ "$sel" = list ]; then
+      echo "== flights on the drone, newest first (size, folder):"
+      "$d" run 'cd ~/team_ws/logs 2>/dev/null && ls -t | grep -vx overwall | head -15 | while read -r f; do printf "%8s  %s\n" "$(du -sh "$f" | cut -f1)" "$f"; done'
+      exit 0
+    fi
+    if [ "$sel" = newest ]; then
+      name=$("$d" run 'ls -t ~/team_ws/logs 2>/dev/null | grep -vx overwall | head -1' | tr -d '\r')
+    else
+      name="$sel"
+    fi
+    [ -n "$name" ] || { echo "no flight logs on the drone (~/team_ws/logs is empty)"; exit 1; }
+    case "$name" in */*|.*|*" "*) echo "STOP: '$name' is not a flight folder name (see: tools/fly logs list)"; exit 2 ;; esac
+    # Files and bytes on each side (directory sizes differ between filesystems, so files only).
+    count() { find "$1" -type f -printf '%s\n' 2>/dev/null | awk '{n++; s+=$1} END {print n+0, s+0}'; }
+    remote=$("$d" run "find ~/team_ws/logs/$name -type f -printf '%s\n' 2>/dev/null | awk '{n++; s+=\$1} END {print n+0, s+0}'" | tr -d '\r')
+    [ "$remote" != "0 0" ] || { echo "no flight folder '$name' on the drone (see: tools/fly logs list)"; exit 1; }
+    mkdir -p "$out"
+    if [ "$(count "$out/$name")" = "$remote" ]; then
+      echo "== $out/$name is already here and complete ($remote files/bytes)"
+    else
+      rm -rf "${out:?}/$name"
+      echo "== copying $name from the drone ($remote files/bytes; video makes it large: wait for the flight to end first)"
+      "$d" pull "~/team_ws/logs/$name" "$out/"
+      here=$(count "$out/$name")
+      [ "$here" = "$remote" ] || { echo "INCOMPLETE: drone has $remote, laptop got $here files/bytes. Run tools/fly logs $name again."; exit 1; }
+      echo "== complete: $out/$name ($here files/bytes)"
+    fi
+    py=$(command -v python3 || command -v python || true)
+    if [ -n "${FLY_NO_SUMMARY:-}" ]; then :
+    elif [ -n "$py" ] && "$py" -c 'import rosbags' 2>/dev/null; then
+      "$py" tools/postflight.py "$out/$name" || echo "(summary failed; the log folder is still saved)"
+    else
+      echo "summary: pip install rosbags, then: python tools/postflight.py $out/$name"
+    fi ;;
   done)
     "$d" runt '~/team_ws/run_mission.sh overwall_nav overwall.launch.py' || true
     "$root/tools/drone-lock" release ;;
