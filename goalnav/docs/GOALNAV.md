@@ -83,8 +83,11 @@ VL53L1X ──────► floor height (gated) ─────────�
   odometry has drifted up to ~0.2 m, and the launch corridor leaves ~0.25 m a
   side to the nearly invisible west net. So the touchdown spot is set from
   M1's corridor face and the barrier's north face, measured from depth seen on
-  the way back (`return_spot.py`, goals.yaml `return_walls`): 0.50 m from M1,
-  0.60 m from the barrier, at most 0.3 m from the remembered spot. Until both
+  the way back (`return_spot.py`, goals.yaml `return_walls`): on the mark
+  itself, 0.50 m from M1 and 0.42 m from the barrier, at most 0.3 m from the
+  remembered spot. The spot it was placed on is clear; around it, where M1
+  meets the barrier, stand feet and pavers reach ~0.6 m into the corridor at
+  floor level. Until both
   are measured it stops 0.4 m short (for up to 3 s), and it keeps the spot
   once below 0.6 m, where tarp skirts would fool the fit.
 
