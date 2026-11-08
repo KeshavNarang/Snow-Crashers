@@ -1,12 +1,16 @@
 """ROS 2 adapter for the goal navigator (``drone_ref.goalnav``).
 
-Subscribes: PX4 local position, attitude, status and land detector; the
-OAK-D depth and RGB images and their CameraInfo; PX4's distance sensor
-(the downward VL53L1X).
-Publishes Offboard velocity setpoints and vehicle commands; status JSON on
-``/goalnav/status``. ``/goalnav/start`` (std_srvs/Trigger) is the one start
-command. The landing target is found in the OAK-D's RGB image
-(``goalnav.pad_detect``, from a reference picture of the mat).
+Subscribes: PX4 local position and attitude (read only); ``/skybeta/state``
+(armed, Offboard, landed, from skybeta's flight_interface); the OAK-D depth
+and RGB images and their CameraInfo; PX4's distance sensor (the downward
+VL53L1X).
+Publishes velocity setpoints on ``/skybeta/setpoint/twist``
+(``goalnav.skybeta``) and status JSON on ``/goalnav/status``; never anything
+on ``/fmu/in/*``. It streams a zero twist from start-up, so flight_interface
+may enter Offboard when the pilot arms and then switches to Position; the
+mission starts (takes off) as soon as Offboard is active. The landing target
+is found in the OAK-D's RGB image (``goalnav.pad_detect``, from a reference
+picture of the mat).
 
 Depth points are placed with the pose received nearest the image's capture
 stamp (both on the ROS clock), so latency does not smear the map.
@@ -21,21 +25,19 @@ import rclpy
 import yaml
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
-from px4_msgs.msg import (DistanceSensor, OffboardControlMode, TrajectorySetpoint, VehicleAttitude,
-                          VehicleCommand, VehicleLandDetected, VehicleLocalPosition, VehicleStatus)
+from geometry_msgs.msg import TwistStamped
+from px4_msgs.msg import DistanceSensor, VehicleAttitude, VehicleLocalPosition
 from sensor_msgs.msg import CameraInfo, Image
 from std_msgs.msg import String
-from std_srvs.srv import Trigger
 
-from drone_ref.goalnav.geometry import (camera_to_odom, depth_points, enu_to_ned, ned_to_enu, optical_to_body,
-                                        px4_attitude_enu, yaw_enu_to_ned)
+from drone_ref.goalnav import skybeta
+from drone_ref.goalnav.geometry import camera_to_odom, depth_points, ned_to_enu, optical_to_body, px4_attitude_enu
 from drone_ref.goalnav.floor_line import dark_floor_points
 from drone_ref.goalnav.pad_detect import PadDetector
 from drone_ref.goalnav.mission import GoalMission, Telemetry
 from drone_ref.goalnav import resource
 from drone_ref.goalnav.profiles import load as load_profile
 
-OFFBOARD = 14
 PARAMS = {
     'goals_file': 'config/goals.yaml',
     'depth_topic': '/oak/stereo/image_raw', 'camera_info_topic': '/oak/stereo/camera_info',
@@ -70,13 +72,13 @@ class GoalNavNode(Node):
         self.mission = GoalMission(spec, *configs)
         self.get_logger().info(f"goalnav profile {p['profile']}: {configs}")
         self.history = deque(maxlen=200)          # (ros time s, position ENU, rotation)
-        self.position = self.attitude = self.status = self.land = None
+        self.position = self.attitude = None
+        self.flight = (False, False, None)        # (armed, offboard, landed) from /skybeta/state
         self.camera = None
         qos = qos_profile_sensor_data
         self.create_subscription(VehicleLocalPosition, '/fmu/out/vehicle_local_position', self._position, qos)
         self.create_subscription(VehicleAttitude, '/fmu/out/vehicle_attitude', self._attitude, qos)
-        self.create_subscription(VehicleStatus, '/fmu/out/vehicle_status_v1', self._status, qos)
-        self.create_subscription(VehicleLandDetected, '/fmu/out/vehicle_land_detected', self._land, qos)
+        self.create_subscription(String, skybeta.STATE_TOPIC, self._state, 10)
         self.create_subscription(Image, p['depth_topic'], self._depth, qos)
         self.create_subscription(CameraInfo, p['camera_info_topic'], self._info, qos)
         self.create_subscription(DistanceSensor, p['range_topic'], self._range, qos)
@@ -84,11 +86,8 @@ class GoalNavNode(Node):
         self.create_subscription(CameraInfo, p['rgb_info_topic'], self._rgb_info, qos)
         self.pad_detector = PadDetector()
         self.rgb_camera = None
-        self.mode_pub = self.create_publisher(OffboardControlMode, '/fmu/in/offboard_control_mode', 10)
-        self.setpoint_pub = self.create_publisher(TrajectorySetpoint, '/fmu/in/trajectory_setpoint', 10)
-        self.command_pub = self.create_publisher(VehicleCommand, '/fmu/in/vehicle_command', 10)
+        self.twist_pub = self.create_publisher(TwistStamped, skybeta.TWIST_TOPIC, 10)
         self.status_pub = self.create_publisher(String, '/goalnav/status', 10)
-        self.create_service(Trigger, '/goalnav/start', self._start)
         self.dt = 1. / float(p['control_hz'])
         self.create_timer(self.dt, self._tick)
         self.create_timer(0.2, self._publish_status)
@@ -111,11 +110,8 @@ class GoalNavNode(Node):
         m = self.position
         self.history.append((self._now(), ned_to_enu((m.x, m.y, m.z)), px4_attitude_enu(self.attitude.q)))
 
-    def _status(self, msg):
-        self.status = msg
-
-    def _land(self, msg):
-        self.land = msg
+    def _state(self, msg):
+        self.flight = skybeta.parse_state(msg.data)
 
     def _info(self, msg):
         k = np.asarray(msg.k, float)
@@ -200,46 +196,32 @@ class GoalNavNode(Node):
         return points[agree]
 
     def _telemetry(self):
-        if self.position is None or self.attitude is None or self.status is None:
+        if self.position is None or self.attitude is None:
             return None
         m = self.position
+        armed, offboard, landed = self.flight
         return Telemetry(t=self._now(), position=ned_to_enu((m.x, m.y, m.z)),
                          velocity=ned_to_enu((m.vx, m.vy, m.vz)), rotation=px4_attitude_enu(self.attitude.q),
-                         armed=self.status.arming_state == 2, offboard=self.status.nav_state == OFFBOARD,
-                         landed=bool(self.land.landed) if self.land is not None else True,
-                         preflight_ok=bool(getattr(self.status, 'pre_flight_checks_pass', True)),
+                         armed=armed, offboard=offboard, landed=True if landed is None else bool(landed),
                          valid=bool(m.xy_valid and m.z_valid and m.v_xy_valid))
 
     # -- outputs -----------------------------------------------------------------------
-    def _start(self, request, response):
-        telemetry = self._telemetry()
-        if telemetry is None:
-            response.success, response.message = False, 'no PX4 telemetry yet'
-        else:
-            response.success, response.message = self.mission.start(telemetry)
-        return response
-
     def _tick(self):
+        """One twist per control tick, zero when there is nothing to fly (it
+        is also the stream flight_interface needs before it will enter
+        Offboard). The mission starts when Offboard is active."""
         telemetry = self._telemetry()
-        if telemetry is None:
-            return
-        setpoint, commands = self.mission.step(telemetry, self.dt)
-        us = int(self._now() * 1e6)
-        if setpoint is not None:
-            nan = float('nan')
-            full = setpoint.position is not None
-            self.mode_pub.publish(OffboardControlMode(timestamp=us, position=full, velocity=True, acceleration=full))
-            unset = np.array([nan, nan, nan], np.float32)
-            self.setpoint_pub.publish(TrajectorySetpoint(
-                timestamp=us, position=enu_to_ned(setpoint.position).astype(np.float32) if full else unset,
-                velocity=enu_to_ned(setpoint.velocity).astype(np.float32),
-                acceleration=enu_to_ned(setpoint.acceleration).astype(np.float32)
-                if setpoint.acceleration is not None else unset,
-                yaw=float(yaw_enu_to_ned(setpoint.yaw)), yawspeed=nan))
-        for command, param1, param2 in commands:
-            self.command_pub.publish(VehicleCommand(timestamp=us, command=command, param1=param1, param2=param2,
-                                                    target_system=1, target_component=1, source_system=1,
-                                                    source_component=1, from_external=True))
+        setpoint = None
+        if telemetry is not None:
+            if self.mission.state == 'IDLE' and telemetry.armed and telemetry.offboard:
+                ok, why = self.mission.start(telemetry)
+                self.get_logger().info(f'Offboard active: mission start: {why}')
+            setpoint = self.mission.step(telemetry, self.dt)
+        velocity, yaw_rate = (np.zeros(3), 0.) if setpoint is None else skybeta.twist(setpoint, telemetry)
+        msg = skybeta.stamp(TwistStamped(), self._now())
+        msg.twist.linear.x, msg.twist.linear.y, msg.twist.linear.z = (float(v) for v in velocity)
+        msg.twist.angular.z = yaw_rate
+        self.twist_pub.publish(msg)
 
     def _publish_status(self):
         m = self.mission

@@ -3,7 +3,9 @@
 Modelled: PX4's offboard position/velocity/acceleration control law with its
 velocity limits, the thrust-vector attitude loop (attitude P gain and body-rate
 limit), tilt and thrust limits, PX4's takeoff handling (``localsim.takeoff``), yaw
-tracking, offboard-signal loss failsafe, mode/arm/force-disarm commands,
+tracking, offboard-signal loss failsafe, mode/arm/force-disarm commands, the
+safety pilot (arm on Altitude, then switch to Position: no takeoff outside
+Offboard), the odometry skybeta's flight_interface reads,
 AUTO_LAND descent, land detection, free fall after a disarm in the air, battery
 drain, and an external-vision-fused local position with drift, noise and
 reported eph/epv. PX4's local frame is the aircraft's body frame at start (as
@@ -136,7 +138,8 @@ class Vehicle:
     def _command(self, message):
         accepted = False
         if message.command == 176 and message.param2 == 6.:
-            accepted = len(self.setpoint_times) >= 10 and self.bus.ns - self.last_mode_ns < 5e8
+            # PX4 enters Offboard only with the setpoint stream already running.
+            accepted = len(self.setpoint_times) >= 5 and self.bus.ns - self.last_mode_ns < 5e8
             if accepted:
                 self.nav_state = m.VehicleStatus.NAVIGATION_STATE_OFFBOARD
         elif message.command == 400:
@@ -158,6 +161,19 @@ class Vehicle:
         self.bus.publish('/fmu/out/vehicle_command_ack', m.VehicleCommandAck(
             timestamp=self.bus.ns // 1000, command=message.command, result=0 if accepted else 4,
             target_system=message.source_system, target_component=message.source_component))
+
+    # -- the safety pilot --------------------------------------------------
+    def pilot_arm(self):
+        """Arm on the ground with the mode switch on Altitude, throttle low."""
+        if self.landed and not self.failsafe and not self.armed:
+            self.armed, self.armed_at, self.flew, self.sliding = True, self.bus.seconds, False, False
+            self.nav_state = m.VehicleStatus.NAVIGATION_STATE_ALTCTL
+            self.events.append((self.bus.seconds, 'pilot', 'armed on Altitude'))
+
+    def pilot_position(self):
+        """Mode switch to Position, still on the ground: the go signal."""
+        self.nav_state = m.VehicleStatus.NAVIGATION_STATE_POSCTL
+        self.events.append((self.bus.seconds, 'pilot', 'switched to Position'))
 
     # -- local frame -----------------------------------------------------
     def _to_local(self, vector):
@@ -286,8 +302,10 @@ class Vehicle:
         return out
 
     def _want_takeoff(self):
-        """PX4 offboard: a fresh setpoint above the estimate or climbing (any amount)."""
-        if not self.armed or self.setpoint is None or self.bus.ns - self.setpoint_times[-1] > 1e9:
+        """PX4 offboard: a fresh setpoint above the estimate or climbing (any
+        amount). In Altitude or Position the pilot's throttle is low: it stays down."""
+        if not self.armed or self.setpoint is None or self.bus.ns - self.setpoint_times[-1] > 1e9 \
+                or self.nav_state != m.VehicleStatus.NAVIGATION_STATE_OFFBOARD:
             return False
         position, velocity, acceleration = (np.asarray(getattr(self.setpoint, k), float)
                                             for k in ('position', 'velocity', 'acceleration'))
@@ -414,6 +432,10 @@ class Vehicle:
             dist_bottom_var=0.0055, dist_bottom_sensor_bitfield=cfg.range_bitfield if range_valid else 0))
         self.bus.publish('/fmu/out/vehicle_attitude', m.VehicleAttitude(
             timestamp=us, timestamp_sample=us, q=self.attitude()))
+        # cuVSLAM's odometry, as flight_interface uses it (its altitude origin
+        # and /skybeta/state): the same drifting estimate, in ENU.
+        self.bus.publish('/visual_slam/tracking/odometry', m.Odometry(pose=m.PoseCov(pose=m.Pose(
+            position=m.Point(x=float(estimate[1]), y=float(estimate[0]), z=float(-estimate[2]))))))
 
     def publish_slow(self):
         us = self.bus.ns // 1000

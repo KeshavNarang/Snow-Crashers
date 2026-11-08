@@ -10,7 +10,7 @@ with its own sensors during the run. Nothing is stored between runs (rule 6.4).
 ## How it flies
 
 ```
-depth (OAK-D) ──► live map ──► goal estimates ──► A* path ──► speed limit ──► follower ──► PX4 velocity
+depth (OAK-D) ──► live map ──► goal estimates ──► A* path ──► speed limit ──► follower ──► twist ──► flight_interface
 PX4 local pos ──►   (odom frame, 10 cm height bands)                 ▲
 VL53L1X ──────► floor height (gated) ──────────────────────────────┘ height hold
 ```
@@ -74,9 +74,12 @@ VL53L1X ──────► floor height (gated) ─────────�
   it. At each, if the mat is still unseen, it sweeps the heading ±35° once
   (3.5 s), then tries the next lookout. It aborts if no lookout shows the mat,
   rather than hovering.
-- **Finish.** Over the pad (from a pad detector, below) it descends and disarms
-  for CP5. It then re-arms, climbs to 2.1 m, flies straight over the barrier
-  toward its takeoff point and lands, for the return bonus. By then the
+- **Finish.** Over the pad (from a pad detector, below) it descends and
+  touches down armed for CP5, and lifts off again 1 s later: PX4 disarms a
+  landed vehicle after `COM_DISARM_LAND` (2 s), and Offboard does not come
+  back until the pilot arms again. It climbs to 2.1 m, flies straight over
+  the barrier toward its takeoff point, and descends until PX4's land
+  detector and `COM_DISARM_LAND` disarm it there, for the return bonus. By then the
   odometry has drifted up to ~0.2 m, and the launch corridor leaves ~0.25 m a
   side to the nearly invisible west net. So the touchdown spot is set from
   M1's corridor face and the barrier's north face, measured from depth seen on
@@ -85,12 +88,34 @@ VL53L1X ──────► floor height (gated) ─────────�
   are measured it stops 0.4 m short (for up to 3 s), and it keeps the spot
   once below 0.6 m, where tarp skirts would fool the fit.
 
-`drone_ref/goalnav_node.py` is the ROS 2 adapter:
-- **Subscribes:** PX4 local position, attitude, status and land detector;
-  depth and CameraInfo; `/fmu/out/distance_sensor`; pad detections.
-- **Publishes:** Offboard velocity setpoints, vehicle commands, and
+`drone_ref/goalnav_node.py` is the ROS 2 adapter. It talks to PX4 only
+through the organizers' `skybeta_flight_interface`
+(`skybetav1/docs/competitor_guide.md` §1-4); nothing is published on
+`/fmu/in/*`:
+- **Subscribes:** PX4 local position and attitude (read only);
+  `/skybeta/state` (armed, Offboard, landed); depth and CameraInfo; RGB;
+  `/fmu/out/distance_sensor`.
+- **Publishes:** `/skybeta/setpoint/twist` at the control rate (50 Hz), and
   `/goalnav/status`.
-- **Start:** `/goalnav/start` is the single start command.
+- **Start:** no command. The node streams a zero twist from start-up (the
+  interface needs a setpoint less than 1 s old). The safety pilot arms on
+  Altitude, then switches to Position; `flight_interface`
+  (`auto_offboard_on_arm:=true`, started by `launch/goalnav.launch.py`)
+  enters Offboard; the mission starts and takes off as soon as
+  `/skybeta/state` shows `offboard_active`, well inside the 10 s PX4 allows
+  after arming. If Offboard ends, the mission stops (`HANDED_OVER`).
+- **Control** (`goalnav/skybeta.py`). The interface sends PX4 a position or a
+  velocity setpoint at 10 Hz, never both and no acceleration feedforward; a
+  pose is floored at 0.3 m and persists, a twist is capped at 1.5 m/s and
+  expires after 1 s. So the mission's setpoints (velocity, plus a position to
+  hold and an acceleration feedforward) go out as twists only: the velocity,
+  plus 0.95 x the position error (MPC_XY_P) and the feedforward / 1.8
+  (MPC_XY_VEL_P_ACC), the heading as a yaw rate (2.8 x its error). Never a
+  pose: if goalnav stalls, the twist expires and PX4 holds where it is (no
+  stale pose to fly back to), and the landings can go below the pose floor.
+  There is no arm, disarm, mode or land command: takeoff is an upward twist,
+  every landing a downward one held until PX4 disarms, and ABORTED descends
+  where it is.
 
 ## The simulator: the course as built
 
@@ -202,7 +227,10 @@ Where it fails:
 - Nothing uses the floor line yet; the simulator only records where it is.
 - There is no stereo image and no cuVSLAM: VIO is the vehicle model's
   drifting estimate.
-- The PX4 model is the Python one, not SITL.
+- The PX4 model is the Python one, not SITL. Between goalnav and it runs
+  the organizers' `flight_interface` itself, unmodified (`localsim/goalrun.py`,
+  on `fakeros`): its clamps, conversions, twist expiry and 10 Hz output. The
+  safety pilot arms on Altitude at 3 s and switches to Position 1.5 s later.
 - Panel dimensions, strut geometry, window size and tunnel height are
   estimates from photos and team notes, not measurements.
 - Unit tests for `goalnav` are not written.

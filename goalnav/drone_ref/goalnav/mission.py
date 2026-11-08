@@ -3,14 +3,20 @@
 Independent of ROS (``drone_ref.goalnav_node`` is the adapter). Each depth
 frame goes into the live map; at ``plan_hz`` the route's goals are looked
 for in the map and a path is planned through the next two; at the control
-rate the follower turns the path into PX4 setpoints.
+rate the follower turns the path into setpoints, which the node sends
+to skybeta's flight_interface as velocity commands (``goalnav.skybeta``).
 
-Phases: IDLE -> PREPARE (stream setpoints, Offboard, arm) -> TAKEOFF ->
-NAVIGATE (the goal chain) -> PAD_DESCEND -> ON_PAD (touched down, CP5; disarmed
-only with ``pad_disarm``) ->
-RETURN (one move: climbing off the pad, over the barrier, down toward the mark)
--> RETURN_DESCEND -> DONE.
-ABORT sends PX4 Land.
+The mission never arms, disarms or changes PX4's mode: the safety pilot
+arms and switches to Position, flight_interface then enters Offboard, and
+the mission starts when it sees that (IDLE -> TAKEOFF). It stops if
+Offboard ends (HANDED_OVER: the pilot has it).
+
+Phases: IDLE -> TAKEOFF -> NAVIGATE (the goal chain) -> PAD_DESCEND ->
+ON_PAD (touched down armed, CP5; lifts off again within ``pad_rest_s``,
+before PX4 disarms it, or stays down with ``pad_disarm``) -> RETURN (one
+move: climbing off the pad, over the barrier, down toward the mark) ->
+RETURN_DESCEND (down onto it, then down until PX4 disarms) -> DONE.
+ABORTED descends where it is until PX4 disarms.
 """
 from dataclasses import dataclass, field
 import math
@@ -26,8 +32,6 @@ from drone_ref.goalnav.livemap import OCCUPIED as OCCUPIED_LOGODDS, Fence, LiveM
 from drone_ref.goalnav.planner import Planner, clearance
 from drone_ref.goalnav.return_spot import ReturnSpot
 from drone_ref.goalnav.window import WindowManeuver
-
-SET_MODE, ARM, LAND = 176, 400, 21
 
 
 @dataclass
@@ -64,7 +68,7 @@ class MissionConfig:
     stall_s: float = 25.
     return_enabled: bool = True
     stop_after: str = None          # staged tests: land where it is and disarm once this goal passes
-    pad_disarm: bool = False        # touch down on the pad armed, disarm only back on the launch mark
+    pad_disarm: bool = False        # end on the pad: stay down until PX4 disarms (no return)
     pad_rest_s: float = 1.0         # on the pad before climbing again (under PX4's COM_DISARM_LAND)
     pad_lookout_reach: float = 0.2  # at a pad lookout within this
     pad_sweep_deg: float = 35.      # there, sweep the heading this far either side of the expected spot
@@ -129,7 +133,6 @@ class GoalMission:
         self.last_plan = -math.inf
         self.phase_since = 0.
         self.progress_at = 0.
-        self.last_arm = -math.inf
         self.telemetry = None
         self.started = None
 
@@ -145,11 +148,13 @@ class GoalMission:
 
     def start(self, telemetry):
         """The single start command: build the map and route around the
-        current pose. Refuses without valid, landed, disarmed telemetry."""
+        current pose, then take off. Called when flight_interface has entered
+        Offboard after the pilot armed (PX4 disarms it if it has not taken off
+        10 s after arming). Refuses without valid, landed telemetry."""
         if self.state != 'IDLE':
             return False, f'already {self.state}'
-        if not telemetry.valid or not telemetry.landed or telemetry.armed:
-            return False, 'needs valid, landed, disarmed telemetry'
+        if not telemetry.valid or not telemetry.landed:
+            return False, 'needs valid, landed telemetry'
         p = telemetry.position
         floor_z = p[2] - self.cfg.landed_base_height
         self.home = p[:2].copy()
@@ -173,7 +178,7 @@ class GoalMission:
         self.follower.reset(yaw)
         self.started = telemetry.t
         self.progress_at = telemetry.t
-        self._enter('PREPARE', telemetry.t)
+        self._enter('TAKEOFF', telemetry.t)
         return True, 'started'
 
     def _update_fences(self):
@@ -550,12 +555,23 @@ class GoalMission:
 
     # -- control -----------------------------------------------------------------------------
     def step(self, telemetry, dt):
-        """One control tick: (Setpoint or None, [PX4 commands])."""
+        """One control tick: a Setpoint, or None (nothing to fly)."""
         self.telemetry = telemetry
         self.dt_last = dt
         state, now = self.state, telemetry.t
-        if state in ('IDLE', 'DONE', 'ABORTED'):
-            return None, []
+        if state in ('IDLE', 'DONE', 'HANDED_OVER'):
+            return None
+        if not telemetry.armed:
+            # PX4 disarmed it: on the floor after COM_DISARM_LAND, or killed.
+            reason = {'ON_PAD': 'disarmed on the pad', 'RETURN_DESCEND': 'returned to the launch'}.get(
+                state, 'disarmed' if state == 'ABORTED' else f'disarmed in {state}')
+            self._enter('DONE', now, reason)
+            return None
+        if not telemetry.offboard:
+            self._enter('HANDED_OVER', now, f'Offboard ended in {state}: the pilot has it')
+            return None
+        if state == 'ABORTED':
+            return self._aborted(telemetry, dt)
         if not telemetry.valid:
             return self._abort(now, 'position estimate invalid')
         if self.started is not None and now - self.started > self.cfg.time_limit:
@@ -563,21 +579,21 @@ class GoalMission:
         return getattr(self, '_' + state.lower())(telemetry, dt)
 
     def _abort(self, now, reason):
+        """Give up: straight down where it is (there is no PX4 Land to ask for)."""
         self._enter('ABORTED', now, reason)
-        return None, [(LAND, 0., 0.)]
+        self.abort_xy = self.telemetry.position[:2].copy()
+        return self._aborted(self.telemetry, self.dt_last)
+
+    def _aborted(self, t, dt):
+        """Descending where it gave up, then pressing down until PX4 disarms."""
+        h = self.floor.height(t.position[2]) if self.floor is not None else 0.
+        vz = -0.3 if t.landed or h < 0.4 else -0.5
+        return Setpoint(np.array([0., 0., vz]), self.follower.yaw if self.follower.yaw is not None
+                        else yaw_of(t.rotation), position=np.array([*self.abort_xy, t.position[2]]))
 
     def _hold(self, telemetry, vz=0.):
         yaw = self.follower.yaw if self.follower.yaw is not None else yaw_of(telemetry.rotation)
         return Setpoint(np.array([0., 0., vz]), yaw)
-
-    def _prepare(self, t, dt):
-        commands = []
-        if t.t - self.phase_since > 0.5 and t.t - self.last_arm > 1.:
-            self.last_arm = t.t
-            commands = [(SET_MODE, 1., 6.), (ARM, 1., 0.)]
-        if t.armed and t.offboard:
-            self._enter('TAKEOFF', t.t)
-        return self._hold(t), commands
 
     def _climb_to(self, t, height, xy):
         """Straight up over ``xy``, held there by PX4's position loop: the walls
@@ -632,7 +648,7 @@ class GoalMission:
             self.takeoff_xy = self.takeoff_xy + push * dt      # Move the hold point with it.
         if self.floor.height(t.position[2]) > self.cfg.handover_height:
             self._enter('NAVIGATE', t.t)        # Clear of the skids' ground effect: let the planner centre it.
-        return setpoint, []
+        return setpoint
 
     def _navigate(self, t, dt):
         route = self.route
@@ -692,7 +708,7 @@ class GoalMission:
             error = self.floor.height(t.position[2]) - height
             az = float(np.clip(-4.0 * error - 3.0 * t.velocity[2], -2., 2.))
             position = np.array([*self.follower.nearest, self.floor.floor_z + height])
-            return Setpoint(np.array([*velocity, vz]), yaw, position=position, acceleration=np.array([*accel, az])), []
+            return Setpoint(np.array([*velocity, vz]), yaw, position=position, acceleration=np.array([*accel, az]))
         if self.hold_xy is not None:
             # Stopped (the planner allows almost no speed): hold the point with a
             # full setpoint; a velocity hold let wall suction pull it 9 cm onto
@@ -701,8 +717,8 @@ class GoalMission:
             az = float(np.clip(-4.0 * error - 3.0 * t.velocity[2], -2., 2.))
             position = np.array([*self.hold_xy, self.floor.floor_z + height])
             return Setpoint(np.array([*push, vz]), yaw, position=position,
-                            acceleration=np.array([*self._stiff(self.hold_xy, t), az])), []
-        return Setpoint(np.array([*velocity, vz]), yaw), []
+                            acceleration=np.array([*self._stiff(self.hold_xy, t), az]))
+        return Setpoint(np.array([*velocity, vz]), yaw)
 
     def _through_window(self, t, dt, goal):
         """Lined up in front of a measured window: the window manoeuvre flies it."""
@@ -719,7 +735,7 @@ class GoalMission:
         az = float(np.clip(-6.0 * error - 3.5 * t.velocity[2], -2., 2.))
         position = np.array([*target, self.floor.floor_z + height])
         return Setpoint(np.array([*feedforward, 0.]), self.follower.yaw, position=position,
-                        acceleration=np.array([*accel, az])), []
+                        acceleration=np.array([*accel, az]))
 
     def _settle(self, t, xy):
         """Stop at a dead end (a ``reach`` goal, the net just past it) before
@@ -728,7 +744,7 @@ class GoalMission:
         height = self.cfg.cruise_height
         az = float(np.clip(-4.0 * (self.floor.height(t.position[2]) - height) - 3.0 * t.velocity[2], -2., 2.))
         return Setpoint(np.zeros(3), self.follower.yaw, position=np.array([*xy, self.floor.floor_z + height]),
-                        acceleration=np.array([*self._stiff(xy, t), az])), []
+                        acceleration=np.array([*self._stiff(xy, t), az]))
 
     def _hold_if_stopped(self, t, velocity, gain=2.5, damping=0.6, limit=0.4):
         """A velocity setpoint alone lets turbulence and wall suction push the
@@ -777,7 +793,7 @@ class GoalMission:
             self.pad_xy = np.array(getattr(goal, 'landing', goal.estimate), float)
             self.pad_descend_h = None
             self._enter('PAD_DESCEND', t.t)
-        return Setpoint(np.array([*self.follower.velocity, vz]), self.follower.yaw), []
+        return Setpoint(np.array([*self.follower.velocity, vz]), self.follower.yaw)
 
     def _pad_search(self, t, dt, goal):
         """The mat not seen yet: fly to each of the goal's lookouts in turn
@@ -802,7 +818,7 @@ class GoalMission:
         az = float(np.clip(-4.0 * error - 3.0 * t.velocity[2], -2., 2.))
         position = np.array([*look, self.floor.floor_z + self.cfg.cruise_height])
         return Setpoint(np.array([*self._repel(t), 0.]), yaw, position=position,
-                        acceleration=np.array([*self._stiff(look, t), az])), []
+                        acceleration=np.array([*self._stiff(look, t), az]))
 
     def _turn_to(self, yaw, dt):
         """The follower's yaw, turned toward ``yaw`` at its rate limit."""
@@ -818,34 +834,26 @@ class GoalMission:
         rate = 0.5 if h > 0.25 else 0.3
         if t.landed:
             self._enter('ON_PAD', t.t)
-            disarm = self.cfg.pad_disarm or not self.cfg.return_enabled or self.stopped_after is not None
-            return self._hold(t), [(ARM, 0., 0.)] if disarm else []
+            return self._hold(t, vz=-0.2)
         if getattr(self, 'pad_descend_h', None) is None or self.phase_since == t.t:
             self.pad_descend_h = h
         self.pad_descend_h = max(self.pad_descend_h - rate * dt, -0.1)
         accel = self._stiff(self.pad_xy, t)
         position = np.array([*self.pad_xy, self.floor.floor_z + self.pad_descend_h])
         return Setpoint(np.array([0., 0., -rate]), self.follower.yaw, position=position,
-                        acceleration=np.array([*accel, 0.])), []
+                        acceleration=np.array([*accel, 0.]))
 
     def _on_pad(self, t, dt):
-        commands = []
-        stopped = self.stopped_after is not None
-        disarm = self.cfg.pad_disarm or not self.cfg.return_enabled or stopped
-        if disarm and t.armed and t.t - self.phase_since < 0.5:
-            commands = [(ARM, 0., 0.)]
-        if not self.cfg.return_enabled or stopped:
-            if not t.armed:
-                self._enter('DONE', t.t, f'stopped after {self.stopped_after}' if stopped else 'landed on the pad')
-            return self._hold(t), commands
-        if t.armed and t.t - self.phase_since > (self.cfg.pad_rest_s if not disarm else 1.):
+        """Touched down armed (CP5). Lift off again within ``pad_rest_s``:
+        PX4 disarms a landed vehicle after COM_DISARM_LAND (2 s), and Offboard
+        does not come back until the pilot arms again. Ending here (no return,
+        or a staged test): press down until PX4 disarms it."""
+        if self.cfg.pad_disarm or not self.cfg.return_enabled or self.stopped_after is not None:
+            return self._hold(t, vz=-0.3)
+        if t.t - self.phase_since > self.cfg.pad_rest_s:
             self._enter('RETURN', t.t)
             self.return_from = None
-        elif not t.armed and t.t - self.phase_since > 1. and t.landed and t.preflight_ok \
-                and t.t - self.last_arm > 1.:
-            self.last_arm = t.t
-            commands = [(ARM, 1., 0.)]
-        return self._hold(t), commands
+        return self._hold(t, vz=-0.2)
 
     def _return(self, t, dt):
         """Back to the launch mark in one move: along the straight line, the
@@ -888,7 +896,7 @@ class GoalMission:
             self.descend_h = h
             self._enter('RETURN_DESCEND', t.t)
         return Setpoint(np.array([*(tangent * speed), vz]), self.follower.yaw, position=position,
-                        acceleration=np.array([*np.clip(accel, -2., 2.), az])), []
+                        acceleration=np.array([*np.clip(accel, -2., 2.), az]))
 
     def _return_short(self, t, left, short=0.4, wait_s=3.):
         """How far short of the touchdown spot to stop: ``short`` until the
@@ -939,15 +947,14 @@ class GoalMission:
         return s, np.clip(profile, 0., cfg.return_height)
 
     def _return_descend(self, t, dt):
-        """Straight down onto the return mark: position held stiffly (PX4's
-        position loop), the height target sliding down."""
+        """Straight down onto the return mark, its position held stiffly, the
+        height target sliding down; once landed, down until PX4 disarms."""
         h = self.floor.height(t.position[2])
         rate = 0.6 if h > 0.6 else 0.3
         if t.landed:
-            self._enter('DONE', t.t, 'returned to the launch')
-            return None, [(ARM, 0., 0.)]
+            return self._hold(t, vz=-0.3)       # Down until PX4 disarms it (COM_DISARM_LAND).
         self.descend_h = max(self.descend_h - rate * dt, -0.1)
         accel = self._stiff(self.return_xy, t)
         position = np.array([*self.return_xy, self.floor.floor_z + self.descend_h])
         return Setpoint(np.array([0., 0., -rate]), self.follower.yaw, position=position,
-                        acceleration=np.array([*accel, 0.])), []
+                        acceleration=np.array([*accel, 0.]))
