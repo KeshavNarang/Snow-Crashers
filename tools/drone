@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Run a command on OUR drone (skybeta-03) or open a shell / copy files.
+#   tools/drone run 'hostname; ros2 topic list'
+#   tools/drone shell
+#   tools/drone push LOCAL REMOTE   |   tools/drone pull REMOTE LOCAL
+# Credentials come from .secrets/skybeta-03.env (gitignored). Never print or commit them.
+set -euo pipefail
+root="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck disable=SC1091
+source "$root/.secrets/skybeta-03.env"
+[ "$DRONE_HOST" = "skybeta-03.local" ] || { echo "refusing: not our drone" >&2; exit 2; }
+askpass="$(mktemp)"; trap 'rm -f "$askpass"' EXIT
+printf '#!/bin/sh\necho "%s"\n' "$DRONE_PASS" > "$askpass"; chmod 700 "$askpass"
+export SSH_ASKPASS="$askpass" SSH_ASKPASS_REQUIRE=force DISPLAY=:0
+opts=(-o StrictHostKeyChecking=accept-new -o PubkeyAuthentication=no -o PreferredAuthentications=password,keyboard-interactive -o ConnectTimeout=8)
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  run)   ssh "${opts[@]}" "$DRONE_USER@$DRONE_HOST" "$@" ;;
+  shell) ssh -t "${opts[@]}" "$DRONE_USER@$DRONE_HOST" ;;
+  push)  scp -r "${opts[@]}" "$1" "$DRONE_USER@$DRONE_HOST:$2" ;;
+  pull)  scp -r "${opts[@]}" "$DRONE_USER@$DRONE_HOST:$1" "$2" ;;
+  *) sed -n 2,6p "$0"; exit 1 ;;
+esac
