@@ -41,6 +41,19 @@ For every fix or feature:
 Use a git worktree (`git worktree add ../<name> -b agent/<topic> origin/main`) rather than
 switching branches in the shared checkout; other sessions work in it.
 
+## Landing changes (pull requests)
+
+Never push straight to `main`. Work in your own worktree on an `agent/<topic>` branch, then:
+1. Evals green on the merged result: `git fetch && git merge origin/main`, then the whole suite
+   (other branches land often; the shared `agents/STATUS.md` table conflicts every time, keep both rows).
+2. `git push -u origin agent/<topic>`, then `gh pr create --fill` with a body saying what changed, what the
+   evals cover, and what was NOT measured on the drone.
+3. `gh pr merge <n> --merge` once it shows MERGEABLE / CLEAN. To land someone else's branch, merge `main`
+   into it in a throwaway worktree (`git worktree add ../tmp -b tmp/<x> origin/<their-branch>`), push that as a
+   plain fast-forward, merge the PR, and remove the worktree. Never rebase or force-push a branch another
+   session may have checked out.
+4. Remove your worktree when the PR is merged (`git worktree remove ../<name>`).
+
 ## Our test drone
 
 `skybeta-03.local`, user `dronehacks`. **Only ever connect to this drone.** SSHing into any other
@@ -62,6 +75,11 @@ the hostname does not resolve, say so; do not guess other hosts.
 
 ## Safety (non-negotiable)
 
+- **Never stop, restart or kill the stack** (the XRCE agent, the `slam` launch, `skybeta-stack`) unless the user
+  asks: on stock PX4 v1.16.2 the flight controller's TELEM2 link stays dead until the FC is power-cycled
+  (`skybetav1/CLAUDE.md` bug #15; a patched firmware fixes it, not confirmed for skybeta-03). To change the
+  camera driver, swap the driver component inside the running container; see
+  `agents/logs/2026-11-07-depth-camera-plan.md` (branch `agent/depth-camera`).
 - Read-only inspection by default (topics, logs, params). No arming, no motor commands, no
   flight scripts, no PX4 param changes without the user explicitly approving that action.
 - Props off on the bench. A human with RC kill switch watches every flight.
