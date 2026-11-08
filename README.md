@@ -6,6 +6,10 @@
 
 **DO NOT MODIFY PX4 SETTINGS!**
 
+## TO FLY
+
+On RC: Altitude, Arm, Position
+
 ## PRIZES:
 
 - 1st place score - 7k
