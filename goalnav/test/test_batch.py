@@ -91,6 +91,39 @@ class ReturnLegTest(unittest.TestCase):
         self.assertIsNone(s['mean_home_s'])
 
 
+class SimErrorTest(unittest.TestCase):
+    """Seen 2026-11-07: 48 runs at once, 18 died of MemoryError building their course voxels.
+    A run the simulator never finished is not a flight failure, and not a pass."""
+
+    def test_errors_are_neither_passes_nor_failures(self):
+        rows = [_row(1, ok=True), _row(2, ok=False), {'run': 's3', 'error': 'no report'}]
+        s = batch.summarise(rows)
+        self.assertEqual(s['runs'], 2)                       # flown
+        self.assertEqual(s['sim_errors'], ['s3'])
+        self.assertEqual(s['success'], 1)
+        self.assertAlmostEqual(s['success_rate'], 0.5)
+        self.assertAlmostEqual(s['success_ci95_low'], round(batch.wilson_low(1, 2), 3))
+        self.assertEqual([f['run'] for f in s['failures']], ['s2'])
+
+    def test_missing_reports_are_found_for_a_retry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, done in (('s1', True), ('s2', False), ('s3', True)):
+                (Path(tmp) / name).mkdir()
+                if done:
+                    (Path(tmp) / name / 'report.json').write_text('{}')
+            runs = [Path(tmp) / n for n in ('s1', 's2', 's3')]
+            self.assertEqual([p.name for p in batch.missing(runs)], ['s2'])
+
+    def test_compare_skips_seeds_either_side_did_not_fly(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            a, b = Path(tmp) / 'a', Path(tmp) / 'b'
+            _write(a, [_row(1, ok=True), {'run': 's2', 'error': 'no report'}])
+            _write(b, [_row(1, ok=True), _row(2, ok=False)])
+            c = batch.compare(a, b)
+        self.assertEqual(c['shared'], 1)
+        self.assertEqual(c['b_breaks'], [])
+
+
 class DeployableTest(unittest.TestCase):
     def test_only_the_launch_default_profile_without_tune_is_deployable(self):
         # The drone starts `ros2 launch drone_ref goalnav.launch.py` with no arguments

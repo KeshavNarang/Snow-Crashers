@@ -119,6 +119,11 @@ def fly(seed, args, extra):
     return run
 
 
+def missing(runs):
+    """Runs the simulator did not finish (no report.json): to fly again, not to count."""
+    return [Path(r) for r in runs if not (Path(r) / 'report.json').exists()]
+
+
 def _segment_distance(p, a, b):
     ax, ay = b[0] - a[0], b[1] - a[1]
     t = max(0., min(1., ((p[0] - a[0]) * ax + (p[1] - a[1]) * ay) / (ax * ax + ay * ay)))
@@ -187,12 +192,13 @@ def runs_needed(target, z=Z95):
 
 def summarise(rows):
     from localsim.clearance import TARGET_M
-    done = [r for r in rows if 'error' not in r]
+    done = [r for r in rows if 'error' not in r]       # flown; an errored run is no pass and no failure
     ok = [r for r in done if r['ok']]
     times = [r['finish_s'] for r in ok]
     home = [r['home_s'] for r in ok if r.get('home_s') is not None]
-    return {'runs': len(rows), 'success': len(ok), 'success_rate': round(len(ok) / max(1, len(rows)), 3),
-            'success_ci95_low': round(wilson_low(len(ok), len(rows)), 3),
+    return {'runs': len(done), 'sim_errors': [r['run'] for r in rows if 'error' in r],
+            'success': len(ok), 'success_rate': round(len(ok) / max(1, len(done)), 3),
+            'success_ci95_low': round(wilson_low(len(ok), len(done)), 3),
             'runs_for_99pct': runs_needed(0.99),
             'mean_finish_s': round(sum(times) / len(times), 1) if times else None,     # on the pad (CP5)
             'max_finish_s': max(times) if times else None,
@@ -207,8 +213,8 @@ def summarise(rows):
             'runs_meeting_clearance': sum(r['clear_m'] >= TARGET_M for r in done),
             'worst_clear_m': min((r['clear_m'] for r in done), default=None),
             'worst_window_clear_m': min((r['window_clear_m'] for r in done), default=None),
-            'failures': [{k: r.get(k) for k in ('run', 'final', 'crashed', 'checkpoints', 'error')}
-                         for r in rows if not r.get('ok')]}
+            'failures': [{k: r.get(k) for k in ('run', 'final', 'crashed', 'checkpoints')}
+                         for r in done if not r['ok']]}
 
 
 def _rows(directory):
@@ -220,7 +226,8 @@ def compare(a_dir, b_dir):
     """B against A on the seeds both flew: which B fixes or breaks, and the change in
     finish time and minimum clearance over the seeds both finished."""
     a, b = _rows(a_dir), _rows(b_dir)
-    shared = sorted(set(a) & set(b), key=lambda s: int(s[1:]))
+    shared = sorted((s for s in set(a) & set(b) if 'error' not in a[s] and 'error' not in b[s]),
+                    key=lambda s: int(s[1:]))
     both = [s for s in shared if a[s].get('ok') and b[s].get('ok')]
     mean = (lambda xs: round(sum(xs) / len(xs), 4) if xs else None)
     return {'shared': len(shared),
@@ -241,7 +248,7 @@ def main(argv=None):
     parser.add_argument('--profile', default='safe')
     parser.add_argument('--scenario', default=None, help='drone-measured numbers, localsim/drone_measured.yaml')
     parser.add_argument('--duration', type=float, default=200.)
-    parser.add_argument('--jobs', type=int, default=24)
+    parser.add_argument('--jobs', type=int, default=16, help='runs at once; each new course voxelises at ~1 GB: 48 at once ran out of 32 GB')
     parser.add_argument('--out', default=str(ROOT / 'localsim/out/batch/run'))
     parser.add_argument('--summarise', default=None, metavar='DIR', help='only score the runs already in DIR')
     parser.add_argument('--compare', nargs=2, default=None, metavar=('A', 'B'), help='B against A, seed by seed')
@@ -258,6 +265,11 @@ def main(argv=None):
         (Path(args.out) / 'provenance.json').write_text(json.dumps(provenance(args, extra), indent=1))
         with ThreadPoolExecutor(args.jobs) as pool:
             runs = list(pool.map(lambda s: fly(s, args, extra), seeds(args.seeds)))
+        again = missing(runs)
+        if again:      # Usually memory: every new course voxelises at once. Retry a few at a time.
+            print(f'retrying {len(again)} runs the simulator did not finish: {[p.name for p in again]}')
+            with ThreadPoolExecutor(max(1, args.jobs // 4)) as pool:
+                list(pool.map(lambda p: fly(int(p.name[1:]), args, extra), again))
     with ProcessPoolExecutor(min(args.jobs, len(runs) or 1)) as pool:
         rows = list(pool.map(score, runs))
     base = Path(args.summarise or args.out)
