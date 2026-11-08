@@ -1,8 +1,10 @@
 """flight_interface (exactly as overwall_nav's overwall.launch.py) + the goal navigator + a logger.
 
 What the stack runs with COMPETITOR_PKG=drone_ref COMPETITOR_LAUNCH=goalnav.launch.py
-(~/team_ws/run_mission.sh drone_ref goalnav.launch.py, then power-cycle). Depth is the OAK-D's own
-(team_ws/camera/oakd_vslam.yaml, installed by the team image); goalnav computes none.
+(~/team_ws/run_mission.sh drone_ref goalnav.launch.py, then power-cycle). The team image is RGBSTEREO
+(colour + the mono pair): on-camera depth cost PX4 its VIO fusion on skybeta-03 (vision 665 ms old).
+Depth comes from stereo_node on the Jetson (the mono pair, overwall_nav's StereoRig); for on-camera
+depth instead: stereo:=false points_topic:='' depth_topic:=/oak/stereo/image_raw.
 Staged tests: tuning:='{stop_after: corridor_1}'. The pilot arms on Altitude, then switches to Position.
 
 Every launch logs to ``log_dir/<date-time>/`` (default ``~/team_ws/logs``, the drone's one folder that
@@ -36,6 +38,9 @@ INTERFACE = [
 GOALNAV = [
     ('profile', 'safe', 'risk profile, config/goalnav_profiles.yaml'),
     ('goals_file', 'config/goals.yaml', 'the goal chain (relative: installed share/drone_ref)'),
+    ('stereo', 'true', 'run stereo_node: depth from the mono pair on the Jetson'),
+    ('points_topic', '/goalnav/stereo/points', "stereo_node's points ('' when the camera gives depth)"),
+    ('depth_topic', '', 'on-camera depth image (the RGBSTEREO image has none)'),
     ('image_topic', '/oak/left/image_mono', 'image for floor tape and pad: /oak/rgb/image_raw for colour'),
     ('image_info_topic', '/oak/left/camera_info', 'its CameraInfo: /oak/rgb/camera_info for colour'),
     ('tuning', '', 'YAML overrides, e.g. "{stop_after: corridor_1, max_speed: 0.4}"'),
@@ -52,7 +57,7 @@ TOPICS = ['/oak/left/camera_info', '/oak/right/camera_info', '/oak/imu/data',
           '/fmu/out/vehicle_land_detected', '/fmu/out/vehicle_control_mode', '/fmu/out/estimator_status_flags',
           '/fmu/out/failsafe_flags', '/fmu/out/battery_status',
           '/skybeta/state', '/skybeta/setpoint/twist', '/skybeta/setpoint/pose',
-          '/goalnav/status', '/rosout', '/tf', '/tf_static']
+          '/goalnav/status', '/goalnav/stereo/points', '/rosout', '/tf', '/tf_static']
 
 
 def _logger(context):
@@ -80,7 +85,10 @@ def generate_launch_description():
     goalnav = Node(package='drone_ref', executable='goalnav_node', name='drone_ref_goalnav',
                    output='screen', emulate_tty=True,
                    parameters=[{name: ParameterValue(LaunchConfiguration(name), value_type=str) for name in
-                                ('profile', 'tuning', 'goals_file', 'image_topic', 'image_info_topic')}])
+                                ('profile', 'tuning', 'goals_file', 'image_topic', 'image_info_topic',
+                                 'points_topic', 'depth_topic')}])
+    stereo = Node(package='drone_ref', executable='stereo_node', name='stereo_node',
+                  output='screen', emulate_tty=True, condition=IfCondition(LaunchConfiguration('stereo')))
     # value_type=str: launch would otherwise read tuning's '{...}' as a YAML dict, not the string the node parses.
     # The logger first: ROS_LOG_DIR must be set before the nodes start so they log into this run's folder.
-    return LaunchDescription(declared + [OpaqueFunction(function=_logger), flight_interface, goalnav])
+    return LaunchDescription(declared + [OpaqueFunction(function=_logger), flight_interface, stereo, goalnav])
