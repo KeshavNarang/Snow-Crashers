@@ -6,12 +6,19 @@ mission lands at land_beyond_wall_m as before.
 What the stack runs with COMPETITOR_PKG=overwall_nav COMPETITOR_LAUNCH=overwall.launch.py
 (~/team_ws/run_mission.sh overwall_nav overwall.launch.py). The test settings (wall height,
 backstop distance, camera angle ...) are in config/overwall.yaml: edit that, then power-cycle.
+
+Every run is logged to ~/team_ws/logs/overwall/<UTC date-time>/ on the drone (bind-mounted, so it
+survives the container and a power-off): every node's log file (ROS_LOG_DIR), a small MCAP bag of the
+mission's topics (no images), and pad_detect's 1 Hz colour snapshots. record:=false turns the bag off.
+These are for reading after a run, never inputs to a later run (rule 6.4).
 """
 import os
+import time
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, SetEnvironmentVariable
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -27,9 +34,25 @@ INTERFACE = [
 ]
 
 
+LOG_ROOT = '/root/team_ws/logs/overwall'
+# Small topics only (~30 kB/s): what the mission saw, decided and commanded. PX4's view (armed, mode,
+# landed, local position) is in /skybeta/state: on skybeta-03 `ros2 bag record` never discovered the
+# /fmu/out/* topics (tried with best-effort QoS overrides too), so they are not listed here.
+BAG_TOPICS = ['/overwall/front', '/overwall/pad', '/skybeta/state', '/skybeta/setpoint/pose',
+              '/skybeta/setpoint/twist', '/visual_slam/tracking/odometry', '/rosout']
+
+
 def generate_launch_description():
     settings = os.path.join(get_package_share_directory('overwall_nav'), 'config', 'overwall.yaml')
     declared = [DeclareLaunchArgument(n, default_value=d, description=h) for n, d, h in INTERFACE]
+    declared.append(DeclareLaunchArgument('record', default_value='true', description='record the MCAP bag'))
+    run_dir = os.path.join(LOG_ROOT, time.strftime('%Y%m%d-%H%M%S', time.gmtime()))
+    os.makedirs(run_dir, exist_ok=True)
+    logging = [
+        SetEnvironmentVariable('ROS_LOG_DIR', run_dir),            # every node's log file goes here
+        ExecuteProcess(cmd=['ros2', 'bag', 'record', '-s', 'mcap', '-o', os.path.join(run_dir, 'bag')] + BAG_TOPICS,
+                       output='log', condition=IfCondition(LaunchConfiguration('record'))),
+    ]
     flight_interface = Node(
         package='skybeta_flight_interface', executable='flight_interface', name='flight_interface',
         output='screen', emulate_tty=True,
@@ -41,4 +64,4 @@ def generate_launch_description():
                output='screen', emulate_tty=True, parameters=[settings])
     mission = Node(package='overwall_nav', executable='overwall_mission', name='overwall_mission',
                    output='screen', emulate_tty=True, parameters=[settings])
-    return LaunchDescription(declared + [flight_interface, depth, pad, mission])
+    return LaunchDescription(declared + logging + [flight_interface, depth, pad, mission])

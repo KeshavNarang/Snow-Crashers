@@ -32,9 +32,13 @@ Run the commands from the repo folder in **Git Bash** on your laptop.
 
 - **"mission" FAIL is expected.** The pre-flight script was written for overwall_nav. It should
   name `drone_ref / goalnav.launch.py`.
-- **"camera pipeline" must PASS (rgbd, colour on).** Without colour the drone can't find the
-  helipad: it flies the course, then gives up and descends where it is. The camera setting
-  belongs to the organizers, so ask them if it fails.
+- **Camera config (read this before flying goalnav).** The active team camera config
+  (`team_ws/camera/oakd_vslam.yaml`) is the organizers' stock one plus colour (`RGBSTEREO`): it has
+  **no on-camera depth**, so goalnav's `/oak/stereo/image_raw` has no publisher and goalnav cannot
+  see walls. The depth + colour config goalnav was built for is kept as
+  `team_ws/camera/oakd_vslam.depth.yaml`, but with it PX4 stopped fusing VIO on skybeta-03
+  (no valid position: it cannot fly Position/Offboard). Check `PX4 position` in preflight before
+  any flight; see `agents/logs/2026-11-07-overwall-pad.md`.
 - **PX4 link must be up.** If it's down, power-cycle the Pixhawk.
 - It must print a **goalnav status** at the end. If it says "NO goalnav status", don't fly: run
   `deploy` again and power-cycle.
@@ -74,7 +78,7 @@ After each flight run `tools/fly logs`, and write what happened (and the log fol
 | "the stack is not running" | Wait ~3 min after power-up and try again. |
 | Build error "Duplicate package names" | An old `drone_ref` is still in `~/team_ws/src`. `deploy` moves it out; check with `tools/drone run 'ls ~/team_ws/src'`. |
 | No goalnav status | The mission didn't start: `deploy` again, then power-cycle. |
-| Lands without finding the helipad | Camera colour (rgbd) is off: see "Reading tools/fly check". |
+| Lands without finding the helipad | Camera colour is off (preflight "colour camera" FAIL): see "Reading tools/fly check". |
 
 More detail: `agents/logs/2026-11-07-goalnav-fly.md` (how goalnav was first deployed by hand),
 `agents/logs/2026-11-07-planner-rebuilt.md` (the route and its sim results),
