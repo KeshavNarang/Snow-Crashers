@@ -1,5 +1,7 @@
 # Multi-agent protocol
 
+Current operational status and competition guidance: [docs/STATUS.md](../docs/STATUS.md).
+
 ## Drone lock (one agent on the drone at a time)
 The drone is shared. Before running anything beyond a read-only look:
 1. `git pull`, then check `tools/drone-lock status` and `agents/STATUS.md`.
@@ -15,4 +17,6 @@ The lock is also written on the drone (`/tmp/agent.lock`) so agents on other mac
 
 ## Rules of the road
 - Never commit `.secrets/`. Never write the password into any tracked file.
-- Don't pass the project's code review hazards: no hard-coded course waypoints in new code.
+- The earlier ban on fixed course waypoints was a competition assumption. The user reports flexible organizer rules; fixed-waypoint shortcuts are within the current requested scope. Keep deployment evidence and flight safeguards separate from scoring assumptions.
+
+- Real RGB is required for pad finding and may be enabled under the current competition guidance. Never fabricate RGB-sensor values or substitute simulated/replayed/colourized mono data as live RGB. See [camera requirements](../docs/CAMERAS.md#required-for-the-real-pad-mission).

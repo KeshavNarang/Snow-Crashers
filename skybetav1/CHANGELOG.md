@@ -1,5 +1,7 @@
 # Changelog
 
+> Historical release notes, not the current flight procedure. Older releases below used a different arming order. For current team instructions and successful flight evidence, use [docs/FLIGHT.md](../docs/FLIGHT.md).
+
 One entry per image version (`VERSION`, tag `skybeta:<VERSION>`). The evidence behind each
 change is in [`CLAUDE.md`](CLAUDE.md); this file says what changed and what you must do.
 

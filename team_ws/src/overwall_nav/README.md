@@ -1,8 +1,10 @@
 # overwall_nav: approach a wall with stereo depth, fly over it, land
 
+Current [project status](../../../docs/STATUS.md), [flight guide](../../../docs/FLIGHT.md) and [camera/depth guide](../../../docs/CAMERAS.md).
+
 A test mission for one wall in a test net, to check the drone's sensors end to end:
 take off, creep forward until the wall is 0.5 m ahead, climb over it, land behind it.
-**Not flown yet.** Same skybeta contract as `snowcrashers_nav`: setpoints only through
+**Wall-crossing success is reported in the dated depth log.** This is separate from the user-confirmed successful simple up/forward/land flights. Same skybeta contract as `snowcrashers_nav`: setpoints only through
 `flight_interface`; the pilot arms in Altitude, then switches to Position.
 
 ## Nodes

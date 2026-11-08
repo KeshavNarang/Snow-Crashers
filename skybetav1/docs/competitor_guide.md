@@ -1,5 +1,7 @@
 # skybeta competitor guide
 
+> Team update (2026-11-07): simple Offboard flights and RC handover have worked on skybeta-03, confirmed by the user. [Current project docs](../../docs/README.md) distinguish those flights from goalnav bench tests and simulations. Original competition restrictions are historical; see the current rules guidance there.
+
 **Read the [rules](../README.md#rules) first.** SSH into another team's drone and you will be
 disqualified. How to log in to yours: [connect to your drone](../README.md#connect-to-your-drone).
 
@@ -9,14 +11,11 @@ The stack below you — OAK-D-S2 → cuVSLAM → PX4 EKF2 over uXRCE-DDS — pub
 GPS-denied pose at ~30 Hz. Everything between your setpoints and the flight controller is
 owned by `skybeta_flight_interface`, which you should not need to modify.
 
-There is **always a safety pilot on RC**. They arm the vehicle, and arming is what starts your
-code flying. They can take it back at any instant. Nothing you write may assume otherwise.
+There is **always a safety pilot on RC**. They arm the vehicle, then switch to Position on the ground; that switch requests Offboard for your already-running code. They can take it back at any instant. Nothing you write may assume otherwise.
 
 > **What has and has not been proven.** Tested on the bench: the full VIO stack, position
 > estimates reaching the flight controller, and Position mode becoming available on drone 16.
-> **Not yet flown on any airframe:** a hover on VIO, takeoff under Offboard, and the
-> arm-then-autonomy handover in §4. Your first runs are the test. Do them with the props off,
-> then low and tethered, and assume something will need adjusting.
+> **Historical organizer validation scope:** hover, Offboard takeoff and handover had not yet been flown when this guide was written. The team has since completed several successful simple flights. This does not validate a new goalnav/cheese mission; rehearse changes with props off before flight.
 
 ---
 
