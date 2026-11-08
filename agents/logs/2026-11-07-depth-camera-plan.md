@@ -74,3 +74,12 @@ plan/dry-run), with known-answer synthetic data and mutation checks.
    conversion and frees bandwidth). That changes the VIO input, so it needs its own, stronger evals and your approval.
 4. Persistence at boot: decide with the user/organizers (a supported override in the stack; a guarded one-shot swap
    from our launch with automatic revert; or manual per run). Nothing is made persistent without approval.
+
+## Status 19:05
+- Offline work pushed: plan, 89 evals (all mutation-checked), the guarded swap tool, health check, acceptance
+  contract, run summary. **Nothing has run on the drone yet**: the lock was held by other agents all along.
+- 19:04 the lock was taken by `claude/goalnav-drone (James)` for "on-camera depth: oak driver pipeline at runtime
+  (no file edits)", i.e. the same goal. Not started here to avoid two agents swapping the same driver. Points that
+  agent may not have, from the source reading above: a dead slam pane restarts the agent (FC wedge on stock
+  v1.16.2); stereo.i_aligned defaults to the absent RGB camera; rect outputs take camera_info size from left/right;
+  minimum range ~0.50 m at 1024x640 with 96 disparities. Its result can be judged with acceptance.judge().
