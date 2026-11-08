@@ -619,6 +619,53 @@ class OverWallTest(unittest.TestCase):
         self.assertLandedBeyond(w)
         self.assertLess(self.landed_miss(w), 0.15, w.log())
 
+    # -- MANUAL (2026-11-08: the team stops the autonomy; auto take-off, then only the PS5 flies) --
+    MANUAL = dict(COURSE, manual=True)
+
+    def test_manual_takes_off_then_hovers_without_input(self):
+        # Asked 2026-11-08: keep the take-off that works, then nothing moves it but the controller.
+        # Controller connected, sticks centred: it climbs to cruise and stays over the start (the
+        # autonomous mission would creep at the wall and climb over it).
+        def operator(t, phase, w):
+            return {'sticks': [0.0, 0.0, 0.0], 'events': []}
+        w = World(**self.COURSE_WALL, remote=operator, params=self.MANUAL).run(60.0)
+        self.assertEqual(w.mission.phase, 'MANUAL', w.log())
+        self.assertAlmostEqual(w.p[2], 0.7, delta=0.12, msg=w.log())
+        self.assertLess(math.hypot(w.p[0] - w.origin[0], w.p[1] - w.origin[1]), 0.1, w.log())
+        self.assertEqual(w.contacts, 0, w.log())
+
+    def test_manual_operator_flies_the_course(self):
+        # R2 up to 2.0 m, left stick forward past the 1.6 m wall to 2.57 m (27 in + 6 ft 2 in),
+        # L1 + Cross: lands there. Then L2 checks: never under the 0.3 m floor... covered by landing.
+        def operator(t, phase, w):
+            if phase != 'MANUAL':
+                return {'sticks': [0.0, 0.0, 0.0], 'events': []}
+            if w.p[2] < 2.0 and w.along() < 0.3:
+                return {'sticks': [0.0, 0.0, 1.0], 'events': []}           # R2
+            if w.along() < 0.686 + 1.88:
+                return {'sticks': [1.0, 0.0, 0.0], 'events': []}           # left stick forward
+            return {'sticks': [0.0, 0.0, 0.0], 'events': [[7, 'land']]}
+        w = World(**self.COURSE_WALL, remote=operator, params=self.MANUAL).run(90.0)
+        self.assertLandedBeyond(w)
+        self.assertAlmostEqual(w.along(), 0.686 + 1.88, delta=0.3, msg=w.log())
+
+    def test_manual_r2_held_stops_at_the_height_cap(self):
+        # 2026-11-08 flight: "went up way too high, we had to kill it". R2 held for 30 s: it
+        # stops at the height cap (max_height_m / net clearance), never above.
+        def operator(t, phase, w):
+            return {'sticks': [0.0, 0.0, 1.0], 'events': []}
+        w = World(**self.COURSE_WALL, remote=operator, params=self.MANUAL).run(50.0)
+        top = max(p[2] for _, p, _ in w.trace)
+        self.assertLess(top, w.mission.height_cap() + 0.1, w.log())
+        self.assertGreater(top, w.mission.height_cap() - 0.2, w.log())
+
+    def test_manual_without_a_controller_lands_in_place(self):
+        # tools/ps5 not running: after manual_no_remote_s it lands where it took off.
+        w = World(**self.COURSE_WALL, params=self.MANUAL).run(60.0)
+        self.assertFalse(w.armed, w.log())
+        self.assertIn('No controller input', w.log())
+        self.assertLess(math.hypot(w.p[0] - w.origin[0], w.p[1] - w.origin[1]), 0.15, w.log())
+
     @staticmethod
     def along_of(w, p):
         return (p[0] - w.origin[0]) * w.f[0] + (p[1] - w.origin[1]) * w.f[1]
