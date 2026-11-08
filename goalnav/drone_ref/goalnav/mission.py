@@ -97,6 +97,26 @@ class MissionConfig:
     repel_limit: float = 0.6
 
 
+class Touchdown:
+    """On the floor by our own sensing: the body origin within ``slack`` of its resting height
+    and barely moving down for ``hold_s``; or PX4's land detector, whichever comes first. PX4's
+    detector took ~3.4 s after contact in the sim, and PX4 disarms 2 s after it says landed, so
+    the pad rest counts from contact and the climb starts before PX4 ever flags landed."""
+
+    def __init__(self, base_height, slack=0.04, still_vz=0.1, hold_s=0.2):
+        self.base, self.slack, self.still_vz, self.hold_s = base_height, slack, still_vz, hold_s
+        self.since = None
+
+    def update(self, t, height, vz, landed):
+        if landed:
+            return True
+        if height <= self.base + self.slack and abs(vz) < self.still_vz:
+            self.since = t if self.since is None else self.since
+            return t - self.since >= self.hold_s
+        self.since = None
+        return False
+
+
 @dataclass
 class Setpoint:
     velocity: np.ndarray            # ENU m/s
@@ -846,8 +866,10 @@ class GoalMission:
         rock beside the mat), the height target sliding down."""
         h = self.floor.height(t.position[2])
         rate = 0.5 if h > 0.25 else 0.3
-        if t.landed:
-            self._enter('ON_PAD', t.t)
+        if self.phase_since == t.t or getattr(self, 'touchdown', None) is None:
+            self.touchdown = Touchdown(self.cfg.landed_base_height)
+        if self.touchdown.update(t.t, h, float(t.velocity[2]), t.landed):
+            self._enter('ON_PAD', t.t)          # pad_rest_s counts from contact, not PX4's 'landed'
             return self._hold(t, vz=-0.2)
         if getattr(self, 'pad_descend_h', None) is None or self.phase_since == t.t:
             self.pad_descend_h = h
