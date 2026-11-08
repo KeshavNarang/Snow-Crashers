@@ -65,8 +65,8 @@ Pull a run with `tools/drone pull team_ws/logs/<date-time> .`; replay it with
 brightness alone the blue mat is within ~10 % of the orange floor, so the
 colour detector has nothing to work with (`pad_image_topic` is empty). Until
 the organizers enable the colour camera or a mono detector is built from real
-images of the mat, the mission flies to its lookouts and aborts there
-(descends where it is).
+images of the mat, the mission flies to its lookouts, then gives up
+and flies home on the return (no CP5).
 
 `stop_after: <goal id>` ends a staged test there: straight down until PX4
 disarms it (`COM_DISARM_LAND`). Goal
