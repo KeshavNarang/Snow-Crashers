@@ -97,5 +97,17 @@ class ReturnStaysOverTheWallsNearThem(unittest.TestCase):
 
 
 
+class TakeoffClimbsAwayFromTheTurnedPanel(unittest.TestCase):
+    """localsim seed 704 (2026-11-08), barrier panel 1 turned so its stand faces the launch corridor
+    (team): body clearance 0.135 m at 0.19 m up in the takeoff climb (target 0.18 m). The mark is
+    0.457 m north of the barrier's centreline; the stand's feet reach ~0.29 m out and the rotor tips
+    0.29 m. The climb point ([right, ahead] of the mark) must clear both by 0.1 m."""
+
+    def test_climb_point_clears_the_stand(self):
+        ahead = yaml.safe_load(GOALS.read_text())['takeoff_offset'][1]
+        self.assertGreaterEqual(0.457 + ahead - HomewardConfig().body_radius - STAND_OUT, 0.10)
+
+
+
 if __name__ == '__main__':
     unittest.main()

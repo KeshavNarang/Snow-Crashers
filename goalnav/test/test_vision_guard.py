@@ -30,6 +30,31 @@ class HoldWithoutVision(unittest.TestCase):
         g = VisionGuard(hold_s=1.0)
         self.assertFalse(any(g.update(10 + k * 0.02, dead_reckoning=False, resets=0).hold for k in range(500)))
 
+    def test_tight_passages_wait_for_steady_vision(self):
+        """Seed 704 with the hold (2026-11-08): touches in the tunnel and the window right after
+        lapses: PX4 holds a drifting estimate, so the body wanders ~0.2 m where margins are 0.1-0.2 m."""
+        g = VisionGuard(hold_s=1.0, steady_s=3.0)
+        g.update(10.0, dead_reckoning=True, resets=0)
+        g.update(11.0, dead_reckoning=False, resets=1)
+        self.assertFalse(g.update(12.5, dead_reckoning=False, resets=1).hold)
+        self.assertFalse(g.steady(12.5))           # open flight may go on, a tight passage waits
+        self.assertTrue(g.steady(14.1))
+        self.assertTrue(VisionGuard().steady(5.0))  # never lost: steady
+
+    def test_no_mapping_while_the_pose_is_dead_reckoned(self):
+        """localsim seed 705 (severity 0.7, 2 lapses a minute, 2026-11-08): after two lapses the drone
+        stood at the first corridor's top, 'free ahead 0', and aborted 'no progress toward m1_end':
+        depth frames mapped with the dead-reckoned pose left walls where there are none."""
+        g = VisionGuard(hold_s=1.0)
+        g.update(10.0, dead_reckoning=False, resets=0)
+        self.assertTrue(g.trust_pose(10.0))
+        g.update(10.1, dead_reckoning=True, resets=0)
+        self.assertFalse(g.trust_pose(10.1))
+        g.update(11.5, dead_reckoning=False, resets=1)
+        self.assertFalse(g.trust_pose(12.0))       # frames captured in the lapse still arriving
+        g.update(12.6, dead_reckoning=False, resets=1)
+        self.assertTrue(g.trust_pose(12.6))
+
 
 if __name__ == '__main__':
     unittest.main()
