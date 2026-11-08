@@ -599,6 +599,30 @@ class OverWallTest(unittest.TestCase):
         self.assertLess(self.left_of_start(w), 1.5 + 0.15, w.log())
         self.assertGreater(self.left_of_start(w), 1.2, w.log())
 
+    def test_course_stays_high_until_2_m_past_the_wall(self):
+        # Team, 2026-11-08: the drone "fell" right after the wall (the look descent, 0.55 m past
+        # it) beside a 1.8 m step-ladder standing just past the wall. Asked: at least 2 m past
+        # the wall before going down. Uses the course settings file, so the flown value is tested.
+        import yaml
+        cfg = yaml.safe_load(open(HERE.parent / 'config' / 'overwall.yaml'))['overwall_mission']['ros__parameters']
+        params = dict(self.COURSE, look_beyond_wall_m=cfg['look_beyond_wall_m'])
+        wall, top = 0.686, 1.6
+        # (a) no pad in view: first time below the wall top + 0.2 after crossing it
+        w = World(**self.COURSE_WALL, pad_feed=True, params=params).run(140.0)
+        self.assertLandedBeyond(w)
+        crossed = [(self.along_of(w, p), p[2]) for _, p, ph in w.trace if ph not in ('WAIT', 'CLIMB', 'SETTLE',
+                   'APPROACH', 'HOLD_WALL', 'CLIMB_OVER', 'DONE')]
+        first_low = next(a for a, z in crossed if z < top + 0.2)
+        self.assertGreaterEqual(first_low, wall + 2.0 - 0.1, w.log())
+        # (b) a pad 2.9 m past the wall is still found and landed on
+        w = World(**self.COURSE_WALL, pad=(wall + 2.9, 0.0, 0.0), params=params).run(140.0)
+        self.assertLandedBeyond(w)
+        self.assertLess(self.landed_miss(w), 0.15, w.log())
+
+    @staticmethod
+    def along_of(w, p):
+        return (p[0] - w.origin[0]) * w.f[0] + (p[1] - w.origin[1]) * w.f[1]
+
     def test_param_guards(self):
         with self.assertRaises(ValueError):
             Params(descent_slow_mps=0.2)
