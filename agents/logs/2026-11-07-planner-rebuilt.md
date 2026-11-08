@@ -33,7 +33,26 @@ launch, the known attempt-1 launch spot by M1's stand).
 - Pad, seed 5: "pad not seen from any lookout"; the ladder now stands in the SW corner by
   the pad lookouts (not checked).
 
+## Window failures: diagnosed (second session)
+goalrun's trace now records the current goal and the window goals' estimate, detection
+and axis (`wgoals`, course frame). Seed 12 (fails) vs seed 2 (passes):
+- The window IS detected in seed 12, its axis correct. window_front (0.9 m out on the
+  axis) is at (0.59, -2.51).
+- The mission's net fence (the `fence` corners in the trace) is turned ~7.5 deg CCW in seed
+  12, so its south edge at x 0.59 is at y -2.48: window_front lies just outside the fence,
+  the planner finds no path, speed 0 until "no progress". Seed 2's front is inside by 0.13 m.
+- So the course heading the mission flies by is off by several degrees at the window. Not
+  the rocks (below the planning band at cruise) and not the window search width (tried).
+- Tried: fitting the heading/north net to the barrier only west of M3 (x -0.9..0.0, in case
+  M3's plywood biased it): seed 12's fence identical to the decimal, 14/20 again. So the
+  barrier fit is not correcting seed 12's heading at all; the error matches the sim's
+  launch heading jitter (+-10 deg, placed by eye). In the old maze M1/M2/M3 (heading_walls)
+  corrected it; on the rebuilt course nothing does before the window. Reverted.
+
 ## Next
-Log the window goal's estimate/detected state per frame in goalrun's trace (it is not
-recorded now) for seed 12 to see why the window is never detected; check seed 5's lookouts
-against the ladder. Then re-run seeds 1-20 (and 21-40: 20 runs bound 70% only to ~50-85%).
+1. Give the mission a heading reference on the rebuilt course: e.g. the C2a window wall
+   itself, or the tunnel's straight sides (both unchanged by the rebuild and seen before the
+   window), as heading_walls; check `fence` turns true in seed 12, then seeds 1-40.
+2. Or let window_front sit inside the fence: place it along the measured axis only as far
+   out as the fence allows (0.6-0.9 m), since the window's own axis is measured.
+3. Seed 5: pad not seen (ladder by the lookouts?), not yet looked at.
