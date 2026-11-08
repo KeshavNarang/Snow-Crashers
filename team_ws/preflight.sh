@@ -28,10 +28,14 @@ if grep -q '^COMPETITOR_PKG=overwall_nav$' /etc/skybeta/drone.env && grep -q '^C
 else
   say FAIL "mission" "drone.env runs $(grep -h '^COMPETITOR_' /etc/skybeta/drone.env | tr '\n' ' ')"
 fi
-mode=$(docker exec skybeta-stack grep -h 'i_pipeline_type' \
-  /root/skybeta_ws/install/oakd_vslam_bringup/share/oakd_vslam_bringup/config/oakd_vslam.yaml 2>/dev/null | awk '{print $2}')
-[[ $mode == rgbd ]] && say PASS "camera pipeline" "rgbd (colour on)" \
-  || say FAIL "camera pipeline" "'${mode:-?}': no colour, the pad can't be seen (needs rgbd + host/run.sh build + power-cycle)"
+# Only the setting itself (the file's comments also mention pipeline names).
+mode=$(docker exec skybeta-stack grep -h -E '^[[:space:]]*i_pipeline_type:' \
+  /root/skybeta_ws/install/oakd_vslam_bringup/share/oakd_vslam_bringup/config/oakd_vslam.yaml 2>/dev/null | awk '{print $2}' | head -1)
+case "${mode,,}" in
+  rgbd)      say PASS "camera pipeline" "rgbd (colour + on-camera depth)" ;;
+  rgbstereo) say WARN "camera pipeline" "RGBSTEREO: colour on, NO on-camera depth (goalnav gets no map; overwall_nav uses CPU stereo)" ;;
+  *)         say FAIL "camera pipeline" "'${mode:-?}': no colour, the pad can't be seen (needs rgbd + host/run.sh build + power-cycle)" ;;
+esac
 
 # -- the organizers' sensor check (PX4 link, PX4 position, cuVSLAM, camera tilt, IMU ...) ----
 echo "-- sensor_check (12 s, keep the drone still)"
