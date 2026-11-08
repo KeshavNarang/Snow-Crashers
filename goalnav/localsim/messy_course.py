@@ -24,6 +24,7 @@ import numpy as np
 
 from drone_ref.course import read_obj
 from localsim import messy_frame as mf
+from localsim import messy_ladder as ml
 from localsim import messy_mesh as mm
 from localsim import messy_stand as ms
 
@@ -572,10 +573,11 @@ def validate(course, radius=BODY_RADIUS + 0.05):
     return problems
 
 
-def generate(seed, severity=1.0, attempts=120):
-    """A validated irregular course; severity scales every offset."""
+def generate(seed, severity=1.0, attempts=120, ladder=True):
+    """A validated irregular course; severity scales every offset. ``ladder``:
+    the stepladder added to the landing area on 2026-11-07 (localsim.messy_ladder)."""
     for attempt in range(attempts):
-        course = _sample(seed * 1000 + attempt, severity)
+        course = _sample(seed * 1000 + attempt, severity, ladder)
         if not validate(course):
             course.seed = seed
             course.attempt = attempt
@@ -651,7 +653,7 @@ def _place_boulders(sampler, groups, pad, tries=80, gap=0.05):
     return boulders, placed_all
 
 
-def _sample(seed, severity):
+def _sample(seed, severity, ladder=True):
     sampler = Sampler(seed, severity)
     rng = sampler.rng
     groups, tunnel = sampler.tunnel()
@@ -668,6 +670,14 @@ def _sample(seed, severity):
             wall.tarp_side = 1 if (np.asarray(pad[:2]) - (a + b) / 2) @ normal > 0 else -1
         groups.update(wall_meshes(wall, rng, (sampler.panel['strut_top'], sampler.panel['strut_out'])))
     groups.update(mf.centre_column(Sampler.barrier_y(joints, mf.CENTRE_X)))
+    ladder_pose = None
+    if ladder:
+        # Its own generator; the rocks placed after it still retry around it, which
+        # moves the shared generator on, so a seed's nets, launch and later attempts differ.
+        centre, yaw, clear = ml.place(np.random.default_rng((seed, 0x1add)), severity * JITTER, groups, _band_raster)
+        groups.update(ml.ladder(centre, yaw))
+        ladder_pose = {'centre': list(centre), 'yaw_deg': yaw, 'top_z': ml.TOP_Z, 'spread': ml.SPREAD,
+                       'base_width': ml.BASE_WIDTH, 'clear': clear}
     boulders, rocks_placed = _place_boulders(sampler, groups, pad)
     groups['Floor'] = (np.array([[-NET, -NET, -0.01], [NET, -NET, -0.01], [NET, NET, -0.01], [-NET, NET, -0.01]]),
                        np.array([[0, 1, 2], [0, 2, 3]]))
@@ -688,6 +698,7 @@ def _sample(seed, severity):
     course = Course(seed, severity, groups, walls, tunnel, pad, launch, nets, _clutter(rng, nets),
                     boulders=boulders)
     course.pad_mat = pad_mat
+    course.ladder = ladder_pose
     course.rocks_placed = rocks_placed
     course.lines = _lines(walls, tunnel, joints, nets)
     course.guideline = guideline(walls, joints)
@@ -706,7 +717,7 @@ def save(course, directory):
             'launch': course.launch, 'pad': {'x': course.pad[0], 'y': course.pad[1], 'radius_m': course.pad[2],
                                              'mat_m': course.pad_mat[0], 'yaw_deg': course.pad_mat[1]},
             'nets': course.nets, 'clutter': course.clutter, 'tunnel': course.tunnel, 'lines': course.lines,
-            'boulders': course.boulders, 'hall': getattr(course, 'hall', None), 'gate_b_open': getattr(course, 'gate_b_open', None),
+            'boulders': course.boulders, 'ladder': getattr(course, 'ladder', None), 'hall': getattr(course, 'hall', None), 'gate_b_open': getattr(course, 'gate_b_open', None),
             'guideline': {'points': course.guideline, 'width': GUIDELINE_WIDTH},
             'walls': [{'name': w.name, 'pieces': [[list(map(float, a)), list(map(float, b))] for a, b in w.pieces],
                        'height': w.height, 'lean_deg': math.degrees(w.lean), 'gap': w.gap,

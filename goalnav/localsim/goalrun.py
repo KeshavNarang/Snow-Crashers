@@ -167,6 +167,7 @@ def main(argv=None):
     parser.add_argument('--out', default=None)
     parser.add_argument('--no-viewer', action='store_true')
     parser.add_argument('--no-camera', action='store_true', help='do not keep the RGB and depth frames')
+    parser.add_argument('--no-ladder', action='store_true', help='the course without the 2026-11-07 stepladder')
     parser.add_argument('--profile', default='safe', help='risk profile in config/goalnav_profiles.yaml')
     parser.add_argument('--tune', action='append', default=[], metavar='KEY=VALUE',
                         help='override one profile setting, e.g. --tune max_speed=0.7 --tune cp4_route=window')
@@ -174,7 +175,7 @@ def main(argv=None):
     out = Path(args.out or ROOT / f'localsim/out/goalnav/seed{args.seed}')
     out.mkdir(parents=True, exist_ok=True)
     wall = time.time()
-    course = messy_course.generate(args.seed, args.severity)
+    course = messy_course.generate(args.seed, args.severity, ladder=not args.no_ladder)
     obj, meta_path = messy_course.save(course, out / 'course')
     meta = json.loads(meta_path.read_text())
     world = MessyWorld(obj, meta, seed=args.seed, cache_dir=ROOT / 'localsim/.cache')
