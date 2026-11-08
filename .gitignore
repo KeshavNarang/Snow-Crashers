@@ -1,2 +1,4 @@
 .secrets/
 flight_logs/
+.venv-ps5/
+__pycache__/

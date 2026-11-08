@@ -29,5 +29,7 @@ case "$cmd" in
   shell) ssh -t "${opts[@]}" "$DRONE_USER@$DRONE_HOST" ;;
   push)  scp -r "${opts[@]}" "$1" "$DRONE_USER@$DRONE_HOST:$2" ;;
   pull)  scp -r "${opts[@]}" "$DRONE_USER@$DRONE_HOST:$1" "$2" ;;
+  tunnel) ssh -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=2 -o ServerAliveCountMax=3 "${opts[@]}" \
+           -L "127.0.0.1:$1:127.0.0.1:$2" "$DRONE_USER@$DRONE_HOST" ;;   # tunnel LOCAL_PORT DRONE_PORT (tools/ps5)
   *) sed -n 2,6p "$0"; exit 1 ;;
 esac
