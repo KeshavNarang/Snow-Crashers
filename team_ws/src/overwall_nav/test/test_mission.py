@@ -663,6 +663,26 @@ class OverWallTest(unittest.TestCase):
         self.assertLess(top, w.mission.height_cap() + 0.1, w.log())
         self.assertGreater(top, w.mission.height_cap() - 0.2, w.log())
 
+    def test_manual_link_drop_mid_flight_hovers(self):
+        # Wi-Fi / tunnel drop while flying with the stick held forward (laptop's last message keeps
+        # its old timestamp): it stops within the 0.5 m leash and hovers there, it does not keep
+        # going and does not land on the 15 s no-controller rule (that is for never connected).
+        mark = {}
+
+        def operator(t, phase, w):
+            if phase != 'MANUAL':
+                return {'sticks': [0.0, 0.0, 0.0], 'events': []}
+            mark.setdefault('start', t)
+            if t - mark['start'] < 3.0:
+                return {'sticks': [1.0, 0.0, 0.0], 'events': []}
+            mark.setdefault('drop', (t, w.along()))
+            return None                                    # nothing new arrives
+        w = World(wall_at=None, remote=operator, params=dict(self.MANUAL, cruise_height_m=1.0)).run(60.0)
+        self.assertEqual(w.mission.phase, 'MANUAL', w.log())
+        self.assertTrue(w.armed, w.log())
+        self.assertLess(w.along() - mark['drop'][1], 0.6, w.log())
+        self.assertAlmostEqual(w.p[2], 1.0, delta=0.15, msg=w.log())
+
     def test_manual_without_a_controller_lands_in_place(self):
         # tools/ps5 not running: after manual_no_remote_s it lands where it took off.
         w = World(**self.COURSE_WALL, params=self.MANUAL).run(60.0)
