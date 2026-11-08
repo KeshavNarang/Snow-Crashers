@@ -22,23 +22,27 @@ Run the commands from the repo folder in **Git Bash** on your laptop.
 
 | Command | What it does |
 |---|---|
-| `tools/fly deploy "<your name>"` | Takes the drone lock, copies goalnav onto the drone (the old copy is kept in `~/drone_ref.prev-<time>`), checks it builds, and picks goalnav as the mission (asks for the sudo password, which is the login password). |
+| `tools/fly deploy "<your name>"` | Takes the drone lock, copies goalnav onto the drone (the old copy is kept in `~/drone_ref.prev-<time>`), checks it builds, makes sure the camera runs **RGBSTEREO** (if it doesn't, builds the team camera image, which takes several minutes), and picks goalnav as the mission (asks for the sudo password, which is the login password). |
 | *power-cycle the drone* | Battery out 10 s, back in, wait about **3 minutes**. |
-| `tools/fly check` | Pre-flight check plus goalnav's status. Drone on the launch mark, props off. |
+| `tools/fly check` | **Both health checks in one go:** the organizers' `host/doctor.sh`, then our pre-flight, then goalnav's status. Drone on the launch mark, props off. |
 | `tools/fly logs` | After a flight: copies the newest flight log folder to `./flight-logs/`. |
 | `tools/fly done` | Puts Luke's overwall_nav mission back (asks sudo) and releases the lock. Takes effect at the next power-up. |
 
 ### Reading `tools/fly check`
 
-- **"mission" FAIL is expected.** The pre-flight script was written for overwall_nav. It should
-  name `drone_ref / goalnav.launch.py`.
-- **Camera config (read this before flying goalnav).** The active team camera config
-  (`team_ws/camera/oakd_vslam.yaml`) is the organizers' stock one plus colour (`RGBSTEREO`): it has
-  **no on-camera depth**, so goalnav's `/oak/stereo/image_raw` has no publisher and goalnav cannot
-  see walls. The depth + colour config goalnav was built for is kept as
-  `team_ws/camera/oakd_vslam.depth.yaml`, but with it PX4 stopped fusing VIO on skybeta-03
-  (no valid position: it cannot fly Position/Offboard). Check `PX4 position` in preflight before
-  any flight; see `agents/logs/2026-11-07-overwall-pad.md`.
+- **The organizers' doctor (part 1) should PASS everything.** If it reports a FAIL, read it and
+  sort it out before flying (ask the organizers if it's their side).
+- **Expected FAILs in our pre-flight (part 2):** "mission" (it names `drone_ref /
+  goalnav.launch.py`; the script was written for overwall_nav), and "pad_detect" and "wall depth
+  rate" (overwall_nav's own programs, which don't run with goalnav). Everything else should PASS,
+  especially **PX4 position**, **PX4 arming checks**, **battery** and **odometry position**.
+- **Camera must be RGBSTEREO** (colour + the black-and-white pair). That's the team camera config
+  (`team_ws/camera/oakd_vslam.yaml`); `deploy` installs it if needed. RGBSTEREO has **no on-camera
+  depth**, so goalnav now makes its own depth from the black-and-white pair (its `stereo_node`,
+  started by the launch with `camera:=rgbstereo`, the default) and finds the helipad in colour. The
+  older depth + colour config (`team_ws/camera/oakd_vslam.depth.yaml`, goalnav `camera:=rgbd`) made PX4
+  stop fusing VIO on skybeta-03 (no valid position, can't fly Position/Offboard), so don't use it; see
+  `agents/logs/2026-11-07-overwall-pad.md`.
 - **PX4 link must be up.** If it's down, power-cycle the Pixhawk.
 - It must print a **goalnav status** at the end. If it says "NO goalnav status", don't fly: run
   `deploy` again and power-cycle.
