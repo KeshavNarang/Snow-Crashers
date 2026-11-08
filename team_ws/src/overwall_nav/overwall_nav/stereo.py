@@ -114,7 +114,11 @@ def fit_floor(points_cam, iterations=80, tolerance=0.02, seed=0, min_inliers=0.2
     n, a = best
     inliers = pts[np.abs((pts - a) @ n) < tolerance]
     centre = inliers.mean(axis=0)
-    n = np.linalg.svd(inliers - centre)[2][2]
+    centred = inliers - centre
+    # Plane normal = the direction of least spread: the smallest-eigenvalue eigenvector of the 3 x 3
+    # covariance. Same answer as the smallest right-singular vector of an SVD of ``centred``, but an
+    # SVD of an N x 3 matrix builds an N x N factor by default (58 % of a fit, before this change).
+    n = np.linalg.eigh(centred.T @ centred)[1][:, 0]
     d = -float(n @ centre)                      # plane: n . X + d = 0
     if d < 0:                                    # orient n from the floor up towards the camera
         n, d = -n, -d
