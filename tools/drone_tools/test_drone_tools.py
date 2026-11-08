@@ -242,6 +242,8 @@ class Json(unittest.TestCase):
         out = cw.to_json(report([95] * NCPU, {10: (1.2, 'stereo', 0.9, {0: 0.9})}))
         back = json.loads(json.dumps(out))
         self.assertEqual(back['procs'][0]['label'], 'stereo_depth')
+        import time
+        self.assertAlmostEqual(back['epoch'], time.time(), delta=5)      # exact timestamp for correlating with logs
         self.assertTrue(back['verdict'])
 
 
