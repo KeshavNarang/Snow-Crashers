@@ -45,6 +45,9 @@ WALLS = {'M1': ('M1 maze divider', 'barrier'), 'M2': ('M2 maze divider', 'north'
          'A1': ('A1 approach wall', 'barrier'), 'C2a': ('C2a chicane wall (window)', 'south')}
 # As scanned (2026-11-06, assets/course-scan.npz from tools/course_scan.py): the window wall is
 # one long panel where the CAD's C2a is (no C2b), its south end inside the net.
+# Floor level under the drone on the launch mark (its arms reach 0.20 m; localsim.goalrun
+# drone_contacts): a stand batten there is under the drone, not beside it.
+LAUNCH_FLOOR_CLEAR = 0.22
 BODY_RADIUS = 0.29                 # Pixhawk to the rear rotor tips (Sky Beta CAD, 7 in props)
 LONG_PANEL, SHORT_PANEL = 1.613, 1.029   # A1, by the pad, is short
 WINDOW_WALL = 1.78                # scanned length, the vinyl wrapping its ends
@@ -585,7 +588,9 @@ def validate(course, radius=BODY_RADIUS + 0.05):
     # Whoever places the drone keeps it visibly clear of the walls (8 cm); the
     # stands' pavers and battens on the floor need only clear its footprint.
     # Floor level: 5 cm (1 cm let the contact judge register a stand's paver at t=0, seeds 5 and 9).
-    for z0, z1, clear in ((0.10, 1.0, BODY_RADIUS + 0.08), (0.03, 0.10, BODY_RADIUS + 0.05)):
+    # And down to the floor, nothing under its body and arms (a swung wall's batten, seed 5).
+    for z0, z1, clear in ((0.10, 1.0, BODY_RADIUS + 0.08), (0.03, 0.10, BODY_RADIUS + 0.05),
+                          (-0.005, 0.03, LAUNCH_FLOOR_CLEAR)):
         layer, _, _ = _band_raster(solid, z0, z1)
         r = int(math.ceil(clear / res))
         if layer[i[0] - r:i[0] + r + 1, i[1] - r:i[1] + r + 1][

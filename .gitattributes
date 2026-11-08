@@ -4,3 +4,4 @@
 tools/drone text eol=lf
 tools/drone-lock text eol=lf
 tools/fly text eol=lf
+tools/manual-flight text eol=lf

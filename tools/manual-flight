@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# Fly OUR drone (skybeta-03) by hand with everything recorded. Plain steps: MANUAL_FLIGHT.md.
+#   tools/manual-flight setup "<your name>" [--no-video]
+#                                  lock, copy the recorder, select it (asks sudo)
+#                                  -> then power-cycle the drone (battery out 10 s, in, wait ~3 min)
+#   tools/manual-flight check      before take-off: recorder running, NO autopilot running (GO / NO-GO)
+#   tools/manual-flight pull       after landing: stop the recorder, copy the flight to ./flight-logs/
+#   tools/manual-flight restore    put back the mission selected before setup (asks sudo), release the
+#                                  lock -> power-cycle
+set -euo pipefail
+root="$(cd "$(dirname "$0")/.." && pwd)"; d="${FLY_DRONE:-$root/tools/drone}"; lock="${FLY_LOCK:-$root/tools/drone-lock}"; cd "$root"
+if [ -z "${DRONE_PASS:-}" ] && [ ! -f .secrets/skybeta-03.env ]; then
+  read -rsp "skybeta-03 password (user dronehacks, from the organizers): " DRONE_PASS </dev/tty; echo >&2
+  export DRONE_PASS
+fi
+host=$("$d" run hostname | tr -d '\r')
+[ "$host" = "skybeta-03" ] || { echo "STOP: connected to '$host', not skybeta-03. Disconnect."; exit 2; }
+SAVED='~/team_ws/.mission-before-manual'          # the mission to put back (COMPETITOR_PKG/LAUNCH lines)
+selected() { "$d" run "grep -h '^COMPETITOR_PKG=' /etc/skybeta/drone.env | cut -d= -f2" | tr -d '\r'; }
+recording() { "$d" run "docker exec skybeta-stack pgrep -f 'ros2 bag record' >/dev/null 2>&1 && echo yes || echo no" | tr -d '\r'; }
+newest() { "$d" run 'ls -t ~/team_ws/logs 2>/dev/null | grep -vx overwall | head -1' | tr -d '\r'; }
+case "${1:-}" in
+  setup)
+    who="${2:?usage: tools/manual-flight setup \"<your name>\" [--no-video]}"
+    launch=manual.launch.py; [ "${3:-}" = --no-video ] && launch=manual_novideo.launch.py
+    "$lock" acquire "$who" "manual flight (recorder only)"
+    if [ "$(selected)" != manual_flight ]; then
+      "$d" run "grep '^COMPETITOR_' /etc/skybeta/drone.env > $SAVED"
+      echo "== remembered the current mission: $("$d" run "cat $SAVED" | tr '\r\n' '  ')"
+    fi
+    "$d" run 'rm -rf ~/team_ws/src/manual_flight'
+    "$d" push team_ws/src/manual_flight '~/team_ws/src/manual_flight'
+    "$d" run 'find ~/team_ws/src/manual_flight -name __pycache__ -prune -exec rm -rf {} +'
+    echo "== build check (under a minute)"
+    "$d" run "docker exec skybeta-stack bash -c 'source skybeta_env.sh >/dev/null 2>&1; team_build.sh --packages-select manual_flight'"
+    echo "== selecting the recorder-only mission $launch (sudo password = the login password)"
+    "$d" runt "~/team_ws/run_mission.sh manual_flight $launch"
+    echo; echo "NOW: power-cycle the drone (battery out 10 s, in), wait ~3 min, then: tools/manual-flight check" ;;
+  check)
+    ok=1
+    echo "== organizers' health check"
+    "$d" run 'cd ~/skybeta && host/doctor.sh' || { echo "!! doctor reported a FAIL (read above)"; ok=0; }
+    echo "== manual flight"
+    pkg=$(selected)
+    if [ "$pkg" = manual_flight ]; then echo "OK   mission: manual_flight (recorder only)"
+    else echo "FAIL mission is '$pkg', not manual_flight: run setup, then power-cycle"; ok=0; fi
+    stack=$("$d" run "docker exec skybeta-stack true >/dev/null 2>&1 && echo up || echo down" | tr -d '\r')
+    if [ "$stack" != up ]; then
+      echo "FAIL the stack container (skybeta-stack) is not running: cannot see what runs. Power-cycle, wait ~3 min"; ok=0
+    else
+      auto=$("$d" run "docker exec skybeta-stack pgrep -af 'flight_interface|_mission|goalnav_node|up_forward_land' || true" | tr -d '\r')
+      if [ -z "$auto" ]; then echo "OK   no autopilot running (nothing can take the drone from the pilot)"
+      else echo "FAIL something that can fly the drone is running:"; echo "$auto"; ok=0; fi
+    fi
+    if [ "$(recording)" = yes ]; then echo "OK   recorder running"
+    else echo "FAIL recorder not running (power-cycle; still off: see MANUAL_FLIGHT.md)"; ok=0; fi
+    run=$(newest)
+    size() { "$d" run "du -sk ~/team_ws/logs/${run:-none}/bag 2>/dev/null | cut -f1" | tr -d '\r' || true; }
+    a=$(size); sleep 3; b=$(size)
+    if [ -n "$run" ] && [ "${b:-0}" -gt "${a:-0}" ] 2>/dev/null; then
+      echo "OK   log ~/team_ws/logs/$run is growing (${a} -> ${b} kB in 3 s)"
+    else echo "FAIL log ~/team_ws/logs/${run:-?} is not growing"; ok=0; fi
+    free=$("$d" run "df -Pk ~/team_ws 2>/dev/null | awk 'NR==2 {print int(\$4/1048576)}'" | tr -d '\r')
+    if [ "${free:-0}" -ge 12 ] 2>/dev/null; then echo "OK   ${free} GB free (with video ~3 GB per minute of flight)"
+    else echo "WARN only ${free:-?} GB free: with video that is ~$(( ${free:-0} / 3 )) min. Short of space: setup --no-video"; fi
+    if [ "$ok" = 1 ]; then echo "GO: arm and fly by hand."; else echo "NO-GO: fix the FAIL lines first."; exit 1; fi ;;
+  pull)
+    [ "$(selected)" = manual_flight ] || { echo "STOP: the drone runs '$(selected)', not the manual recorder. Use tools/fly logs."; exit 2; }
+    run=$(newest)
+    [ -n "$run" ] || { echo "no flight logs on the drone (~/team_ws/logs is empty)"; exit 1; }
+    echo "== stopping the recorder so the bag is closed and complete (flight: $run)"
+    "$d" run "docker exec skybeta-stack pkill -INT -f 'ros2 bag record' || true"
+    for _ in $(seq 1 20); do [ "$(recording)" = no ] && break; sleep 1; done
+    [ "$(recording)" = no ] || { echo "STOP: the recorder did not stop in 20 s. Wait, then run pull again."; exit 1; }
+    "$d" run "test -f ~/team_ws/logs/$run/bag/metadata.yaml" \
+      || echo "!! no bag/metadata.yaml: the bag was not closed cleanly (power-off?). Copying it anyway."
+    "$root/tools/fly" logs "$run"
+    echo "Recording is now off until the next power-up (each power-up records a new folder)." ;;
+  restore)
+    prev=$("$d" run "cat $SAVED 2>/dev/null || true" | tr -d '\r')
+    pkg=$(printf '%s\n' "$prev" | sed -n 's/^COMPETITOR_PKG=//p'); launch=$(printf '%s\n' "$prev" | sed -n 's/^COMPETITOR_LAUNCH=//p')
+    if [ -z "$pkg" ] || [ -z "$launch" ] || [ "$pkg" = manual_flight ]; then
+      pkg=overwall_nav; launch=overwall.launch.py; echo "== nothing remembered: putting back $pkg (as tools/fly done does)"
+    fi
+    echo "== putting back $pkg $launch (sudo password = the login password)"
+    "$d" runt "~/team_ws/run_mission.sh $pkg $launch"
+    "$d" run "rm -f $SAVED"
+    "$lock" release
+    echo "NOW: power-cycle the drone so it runs $pkg again." ;;
+  *) sed -n 2,9p "$0"; exit 1 ;;
+esac
