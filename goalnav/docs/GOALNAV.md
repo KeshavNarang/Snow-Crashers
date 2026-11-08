@@ -122,7 +122,9 @@ course per seed from the CAD's topology and photos of the event net:
 - **Placement and checks:** the drone is placed ±0.2 m and ±12° off the launch
   mark. Layouts that close a passage (5 cm slack a side at flight height, 2 cm
   for the window), open a way around the tunnel, or put a tarp or paver under
-  the drone on the launch mark are resampled. `--severity 0` keeps the CAD
+  the drone on the launch mark are resampled. The maze must stay open with
+  the north net 10 cm further in: the gates at its far end (M1's end, gate A)
+  are against that net, which the drone cannot see. `--severity 0` keeps the CAD
   placement with everything else as built.
 
 Sensor models (`localsim/messy_world.py`):

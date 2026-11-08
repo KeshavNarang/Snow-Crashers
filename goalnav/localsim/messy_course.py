@@ -88,6 +88,7 @@ PAD_ROCK_REACH = 1.0
 # Around the net (team): the next net 3 ft north (net to net), empty but for a
 # flat blue floor tarp and its PVC frame; the hall's glass wall 8 ft west of the west net.
 NEXT_COURSE_GAP = 0.914
+NORTH_NET_SLACK = 0.10            # the north net may hang this far in (validate: gates against it)
 GLASS_FROM_NET = 2.438
 # The tunnel sits slightly lower than the model: its top about 10 cm down.
 TUNNEL_DROP = (0.07, 0.13)
@@ -235,10 +236,13 @@ class Sampler:
         # As built, seen from the pad: two short panels from the west net (M1
         # stands on the maze side at the end of the first, A1 on the landing
         # side at the end of the second), then a long one, then one cut to the tunnel.
-        joints = [j0]
+        # Each joint a few cm off the scanned line, not a random walk of panel
+        # angles: the panels butt end to end and the last meets the tunnel.
+        joints, nominal = [j0], j0
         for length, tilt in zip((self.panel['short'], self.panel['short'], self.panel['long']), BARRIER_TILT):
-            a = math.radians(tilt + self.u(-3, 3))
-            joints.append(joints[-1] + length * np.array([math.cos(a), math.sin(a)]))
+            nominal = nominal + length * np.array([math.cos(math.radians(tilt)), math.sin(math.radians(tilt))])
+            dy = nominal[1] + self.u(-0.04, 0.04) - joints[-1][1]
+            joints.append(joints[-1] + np.array([math.sqrt(length ** 2 - dy ** 2), dy]))
         joints.append(tunnel['place_xy'](np.array([TUBE['cx'] - TUBE['hw'] + 0.04, BARRIER_Y])))
         walls = []
         for k, (a, b) in enumerate(zip(joints, joints[1:])):
@@ -530,7 +534,10 @@ def validate(course, radius=BODY_RADIUS + 0.05):
     if above_floor[p[0] - r:p[0] + r + 1, p[1] - r:p[1] + r + 1][np.hypot(*np.mgrid[-r:r + 1, -r:r + 1]) * res <= 0.33].any():
         problems.append('something stands on or beside the landing mat')
     fat = _inflate(grid, radius, res)
-    seen = _reachable(fat, launch, res, extent)
+    # The maze's far gates (M1's end, gate A) are against the north net, which
+    # the drone cannot see: they must leave room for where it might be.
+    sagged = _inflate(grid | (yy > nets['north'] - NORTH_NET_SLACK), radius, res)
+    seen = _reachable(sagged, launch, res, extent)
     if not seen[at(pre)]:
         problems.append('maze closed: launch cannot reach the tunnel mouth')
     if not _reachable(fat, pre, res, extent)[at(post)]:
