@@ -7,7 +7,7 @@ The course (``localsim.messy_course``) is new for every seed: built like the
 real one (plywood stands, one-sided tarps, wire tunnel) and placed off the
 CAD, an almost invisible net with a busy room behind it, stereo noise. The
 referee's checkpoint lines move with their walls. The drone gets only its
-sensors: stereo depth and RGB from the OAK-D (mounted pitched 26.7 degrees
+sensors: stereo depth and RGB from the OAK-D (mounted pitched 27.6 degrees
 down), PX4 state and the downward rangefinder. It finds the landing target
 in the RGB image itself (``drone_ref.goalnav.pad_detect``).
 """
@@ -27,9 +27,8 @@ sys.path.insert(0, str(ROOT))
 # reaches the vehicle through its clamps, conversions and 10 Hz output.
 sys.path.insert(0, str(ROOT.parent / 'skybetav1/src/skybeta_flight_interface'))
 
-from drone_ref.goalnav.geometry import depth_points    # noqa: E402
 from localsim import fakeros as m                      # noqa: E402
-from localsim import messy_course, messy_ladder        # noqa: E402
+from localsim import jetson_stereo, messy_course, messy_ladder   # noqa: E402
 from localsim.aero import WallField                    # noqa: E402
 from localsim.camrec import CameraRecorder             # noqa: E402
 from localsim.messy_rgb import FloorPainter, RGBCamera, render as render_rgb   # noqa: E402
@@ -42,18 +41,20 @@ from localsim.world import Camera                      # noqa: E402
 PHYSICS_DT = 0.005
 PILOT_SWITCH_NS = 1_500_000_000     # arm, then switch to Position "within a few seconds"
 # What the OAK-D publishes with the team camera config (team_ws/camera/oakd_vslam.yaml):
-# its own stereo depth (16UC1 mm, 640x400) and the colour camera (640x400 at 15 Hz).
+# its own stereo depth (16UC1 mm, 640x400) and the colour camera (640x400 bgr8 at 10 Hz,
+# measured on skybeta-03 2026-11-08).
 DEPTH_TOPIC, DEPTH_INFO_TOPIC = '/oak/stereo/image_raw', '/oak/stereo/camera_info'
 RGB_TOPIC, RGB_INFO_TOPIC = '/oak/rgb/image_raw', '/oak/rgb/camera_info'
 MONO_TOPIC, MONO_INFO_TOPIC = '/oak/left/image_mono', '/oak/left/camera_info'   # without --colour
 # What drone_ref.stereo_node publishes from the mono pair (the drone's RGBSTEREO camera config).
 POINTS_TOPIC = '/goalnav/stereo/points'
 # The camera pipelines the drone can run (goalnav.launch.py CAMERA_MODES; test_sim_camera.py keeps the
-# goalnav topics equal). rgbstereo, the team config: stereo_node depth on the Jetson, ~4.5 Hz and
-# ~0.13 s old (agents/logs/2026-11-07-depth-bottleneck.md), the pad found in colour. rgbd: the
-# OAK-D's own depth (it cost PX4 its VIO fusion on skybeta-03).
+# goalnav topics equal). rgbstereo, the team config: stereo_node depth on the Jetson, 3.77 Hz and
+# 0.159 s old on average, both jittered (localsim.jetson_stereo; measured 2026-11-08,
+# agents/logs/2026-11-08-sim-stereo-drone.md), the pad found in colour on its own 10 Hz clock.
+# rgbd: the OAK-D's own depth (it cost PX4 its VIO fusion on skybeta-03).
 SIM_CAMERAS = {
-    'rgbstereo': {'hz': 4.5, 'latency': 0.13,
+    'rgbstereo': {'hz': 3.77, 'latency': 0.159,
                   'goalnav': {'depth_topic': '', 'points_topic': POINTS_TOPIC, 'image_topic': '',
                               'pad_image_topic': RGB_TOPIC, 'pad_info_topic': RGB_INFO_TOPIC}},
     'rgbd': {'hz': 10., 'latency': 0.1,
@@ -64,7 +65,7 @@ SIM_CAMERAS = {
 # 1024x640 at fx 638 (77.5 deg). goalnav itself assumes 27.0 deg.
 CAMERA_PITCH_DEG = 27.6
 CAMERA_OFFSET = (0.105, 0.038, 0.030)
-# On-camera depth: ~29 Hz on the camera (depth_test.py); the simulator renders fewer frames
+# On-camera depth (rgbd): ~29 Hz on the camera (depth_test.py); the simulator renders fewer frames
 # (--camera-hz). About half the pixels without a return (21 % valid on a bare bench), 0.2-6 m.
 STEREO_DROP = 0.5
 STEREO_RANGE = (0.2, 6.0)
@@ -73,6 +74,11 @@ STEREO_RANGE = (0.2, 6.0)
 COLOUR_SIZE, COLOUR_HFOV = (224, 140), 66.3
 COLOUR_OFFSET = (CAMERA_OFFSET[0], CAMERA_OFFSET[1] - 0.0378, CAMERA_OFFSET[2])
 COLOUR_PITCH_DEG = 27.0          # skybeta-03 TF, base_link -> oak_rgb_camera_optical_frame (2026-11-07)
+# Measured on skybeta-03 (2026-11-08): principal point (315.1, 196.6) at 640x400; colour at 10 Hz,
+# 46 ms old, on its own clock; in the dark room the image's mean was 14/255.
+COLOUR_PRINCIPAL_640 = (315.1, 196.6)
+COLOUR_HZ, COLOUR_AGE = 10., 0.046
+DARK_EXPOSURE = 0.11
 
 
 class Recorder:
@@ -193,9 +199,15 @@ def build_parser():
     parser.add_argument('--camera', choices=sorted(SIM_CAMERAS), default='rgbstereo',
                         help='camera pipeline as on the drone (goalnav.launch.py camera:=); default %(default)s')
     parser.add_argument('--camera-hz', type=float, default=None,
-                        help='depth frames per second (default: the pipeline value, rgbstereo 4.5, rgbd 10)')
+                        help='depth frames per second, the mean (default: the pipeline value, rgbstereo 3.77, rgbd 10)')
     parser.add_argument('--camera-latency', type=float, default=None,
-                        help='depth frame age, s (default: the pipeline value, rgbstereo 0.13, rgbd 0.1)')
+                        help='depth frame age, s, the mean (default: the pipeline value, rgbstereo 0.159, rgbd 0.1)')
+    parser.add_argument('--colour-hz', type=float, default=COLOUR_HZ,
+                        help='rgbstereo colour frames per second (measured %(default)s; fewer renders faster)')
+    parser.add_argument('--dark-floor', action='store_true',
+                        help='rgbstereo: the floor has no texture and gives no depth (seen on the drone)')
+    parser.add_argument('--colour-exposure', default='1',
+                        help="colour brightness gain, or 'dark' for the dark room (%s); default %%(default)s" % DARK_EXPOSURE)
     parser.add_argument('--colour', action='store_true',
                         help='rgbd only: colour as the tape/pad image (rgbstereo always gives the pad colour)')
     parser.add_argument('--set', action='append', default=[], metavar='PARAM=VALUE')
@@ -221,6 +233,25 @@ def camera_timing(args):
             float(args.camera_latency if args.camera_latency is not None else mode['latency']))
 
 
+def camera_schedule(args, seconds, rng):
+    """Capture and publish times (s from the start) of the depth and colour frames, (N, 2) each.
+    rgbstereo: depth with the drone's measured jitter (localsim.jetson_stereo), colour on its own
+    10 Hz clock. rgbd: fixed rate and age, colour with each depth frame."""
+    hz, latency = camera_timing(args)
+    if args.camera == 'rgbstereo':
+        depth = jetson_stereo.schedule(hz, latency, seconds, rng)
+        capture = np.arange(rng.random() / args.colour_hz, seconds, 1. / args.colour_hz)
+        return depth, np.column_stack([capture, capture + COLOUR_AGE])
+    capture = np.arange(0., seconds, 1. / hz)
+    depth = np.column_stack([capture, capture + latency])
+    return depth, depth
+
+
+def left_camera():
+    """The drone's left mono camera as the simulator renders it: fx 398.7 px at 640x400 (77.5 deg)."""
+    return Camera(pitch_deg=CAMERA_PITCH_DEG, hfov_deg=77.5, min_depth=STEREO_RANGE[0], offset=CAMERA_OFFSET)
+
+
 def main(argv=None):
     args = build_parser().parse_args(argv)
     args.camera_hz, args.camera_latency = camera_timing(args)
@@ -244,8 +275,7 @@ def main(argv=None):
     params['flight_interface'] = {'auto_offboard_on_arm': True}     # as the competitor launch file sets it
     bus = m.Bus(params)
     bus.ns = 5_000_000_000
-    # The drone's OAK-D: fx 398.7 px at 640x400 (77.5 deg), minimum range 0.31 m.
-    camera = Camera(pitch_deg=CAMERA_PITCH_DEG, hfov_deg=77.5, min_depth=STEREO_RANGE[0], offset=CAMERA_OFFSET)
+    camera = left_camera()
     cad_course = json.loads((ROOT / 'config/course_v3.json').read_text())
     referee = Referee(cad_course, messy_course.BODY_RADIUS)
     referee.use_lines({route: messy_course.checkpoints(meta, lines) for route, lines in referee.lines.items()})
@@ -279,7 +309,7 @@ def main(argv=None):
              'map': recorder.map_geometry(mission), 'lines': meta['lines'], 'pad': meta['pad'],
              'nets': meta['nets'], 'launch': meta['launch'], 'result': result}
     if recorder.cams is not None:
-        trace['cams'] = recorder.cams.summary(colour_camera(), camera)
+        trace['cams'] = recorder.cams.summary(colour_camera(_exposure(args)), camera)
     (out / 'trace.json').write_text(json.dumps(trace, separators=(',', ':'), default=float))
     if not args.no_viewer:
         from localsim import live_index, viewer3d
@@ -294,10 +324,14 @@ def main(argv=None):
 def fly(args, bus, world, camera, vehicle, mission, referee, recorder, meta, rng):
     begin = bus.ns
     start_at, end = begin + int(3e9), begin + int(args.duration * 1e9)
-    next_fast = next_slow = next_frame = next_trace = next_map = next_range = begin
-    frame_period = int(1e9 / args.camera_hz)
-    queue, start, settled = [], None, None
-    rgb_camera, painter, frames = colour_camera(), FloorPainter(meta), 0
+    next_fast = next_slow = next_trace = next_map = next_range = begin
+    # Capture and publish times of each frame, ns (localsim.jetson_stereo for rgbstereo's jitter).
+    depth_times, colour_times = (begin + (t * 1e9).astype(np.int64)
+                                 for t in camera_schedule(args, args.duration + 1., np.random.default_rng(args.seed + 29)))
+    separate = args.camera == 'rgbstereo'      # colour on its own clock, not with the depth frames
+    queue, colour_queue, start, settled = [], [], None, None
+    rgb_camera, painter = colour_camera(_exposure(args)), FloorPainter(meta)
+    last_colour = None
     next_cloud = begin
     nets = meta['nets']
     info = {}
@@ -315,27 +349,39 @@ def fly(args, bus, world, camera, vehicle, mission, referee, recorder, meta, rng
             # The downward laser, as PX4 reports it (vehicle_local_position.dist_bottom).
             vehicle.range_reading = world.range_down(vehicle.p, vehicle.rotation())
             next_range += 20_000_000
-        if bus.ns >= next_frame:
-            depth = world.render_depth(camera, vehicle.p, vehicle.rotation())
-            frames += 1
-            colour = render_rgb(world, rgb_camera, painter, vehicle.p, vehicle.rotation(), rng)
-            queue.append((bus.ns + int(args.camera_latency * 1e9), bus.ns, depth, colour,
-                          (vehicle.p.copy(), vehicle.rotation())))
-            next_frame += frame_period
+        if len(depth_times) and bus.ns >= depth_times[0, 0]:
+            published, depth_times = depth_times[0, 1], depth_times[1:]
+            if separate:
+                points = jetson_stereo.points(world, camera, vehicle.p, vehicle.rotation(), rng, args.dark_floor)
+                depth, colour = jetson_stereo.depth_image(points, camera), None
+            else:
+                depth = world.render_depth(camera, vehicle.p, vehicle.rotation())
+                points, colour = None, render_rgb(world, rgb_camera, painter, vehicle.p, vehicle.rotation(), rng)
+            queue.append((published, bus.ns, depth, colour, (vehicle.p.copy(), vehicle.rotation()), points))
             if bus.ns >= next_cloud and bus.ns >= start_at:
                 recorder.clouds.append(_cloud(bus.seconds - begin / 1e9, camera, depth, vehicle))
                 next_cloud = bus.ns + 200_000_000
+        if separate and len(colour_times) and bus.ns >= colour_times[0, 0]:
+            published, colour_times = colour_times[0, 1], colour_times[1:]
+            colour_queue.append((published, bus.ns, render_rgb(world, rgb_camera, painter, vehicle.p,
+                                                               vehicle.rotation(), rng)))
+        while colour_queue and colour_queue[0][0] <= bus.ns:
+            # The mono image for the tape, colour for the pad.
+            _, captured, last_colour = colour_queue.pop(0)
+            mono = (last_colour.astype(float) @ [0.299, 0.587, 0.114]).astype(np.uint8)
+            for topic, message in image_messages(rgb_camera, mono, captured, MONO_TOPIC, MONO_INFO_TOPIC, 'mono8'):
+                bus.publish(topic, message)
+            for topic, message in image_messages(rgb_camera, last_colour, captured, RGB_TOPIC, RGB_INFO_TOPIC, 'rgb8'):
+                bus.publish(topic, message)
+            if recorder.detector is not None:
+                recorder.detector.last = None          # Set again only if the node looks at this frame.
         shown = None
         while queue and queue[0][0] <= bus.ns:
-            _, captured, depth, colour, pose = queue.pop(0)
-            if args.camera == 'rgbstereo':
-                # stereo_node's points from the mono pair; the mono image for the tape, colour for the pad.
-                bus.publish(POINTS_TOPIC, stereo_points(camera, depth, captured, rng))
-                mono = (colour.astype(float) @ [0.299, 0.587, 0.114]).astype(np.uint8)
-                for topic, message in image_messages(rgb_camera, mono, captured, MONO_TOPIC, MONO_INFO_TOPIC, 'mono8'):
-                    bus.publish(topic, message)
-                for topic, message in image_messages(rgb_camera, colour, captured, RGB_TOPIC, RGB_INFO_TOPIC, 'rgb8'):
-                    bus.publish(topic, message)
+            _, captured, depth, colour, pose, points = queue.pop(0)
+            if separate:
+                # stereo_node's points from the mono pair, shown with the newest colour frame.
+                bus.publish(POINTS_TOPIC, points_message(points, captured))
+                colour = last_colour
             else:
                 for topic, message in depth_messages(camera, depth, captured, rng):
                     bus.publish(topic, message)
@@ -346,11 +392,11 @@ def fly(args, bus, world, camera, vehicle, mission, referee, recorder, meta, rng
                     topics, colour = (MONO_TOPIC, MONO_INFO_TOPIC, 'mono8'), np.repeat(image[..., None], 3, 2)
                 for topic, message in image_messages(rgb_camera, image, captured, *topics):
                     bus.publish(topic, message)
+            if recorder.detector is not None and not separate:
+                recorder.detector.last = None          # Set again only if the node looks at this frame.
             shown = ((captured - begin) / 1e9, colour, depth, pose)
-        if shown is not None and recorder.detector is not None:
-            recorder.detector.last = None              # Set again only if the node looks at this frame.
         bus.drain()
-        if shown is not None and recorder.cams is not None and bus.ns >= start_at:
+        if shown is not None and shown[1] is not None and recorder.cams is not None and bus.ns >= start_at:
             recorder.camera_frame(shown[0], rgb_camera, shown[1], camera, shown[2], shown[3], mission, meta['pad'])
         bus.run_timers()
         if start is None and bus.ns >= start_at:
@@ -442,10 +488,16 @@ def on_mat(pad, xy):
     return abs(u) <= half and abs(v) <= half
 
 
-def colour_camera():
-    """The OAK-D's colour camera (at the renderer's size)."""
-    return RGBCamera(width=COLOUR_SIZE[0], height=COLOUR_SIZE[1], hfov_deg=COLOUR_HFOV, offset=COLOUR_OFFSET,
-                     pitch_deg=COLOUR_PITCH_DEG)
+def colour_camera(exposure=1.0):
+    """The OAK-D's colour camera (at the renderer's size, its principal point scaled from 640x400)."""
+    w, h = COLOUR_SIZE
+    principal = ((COLOUR_PRINCIPAL_640[0] + 0.5) * w / 640 - 0.5, (COLOUR_PRINCIPAL_640[1] + 0.5) * h / 400 - 0.5)
+    return RGBCamera(width=w, height=h, hfov_deg=COLOUR_HFOV, offset=COLOUR_OFFSET, pitch_deg=COLOUR_PITCH_DEG,
+                     principal=principal, exposure=exposure)
+
+
+def _exposure(args):
+    return DARK_EXPOSURE if args.colour_exposure == 'dark' else float(args.colour_exposure)
 
 
 def image_messages(camera, image, ns, topic, info_topic, encoding):
@@ -453,16 +505,18 @@ def image_messages(camera, image, ns, topic, info_topic, encoding):
     channels = 1 if image.ndim == 2 else 3
     msg = m.Image(header=header, height=camera.height, width=camera.width, encoding=encoding,
                   step=camera.width * channels, data=m.array('B', image.tobytes()))
-    k = np.array([camera.fx, 0, camera.width / 2, 0, camera.fx, camera.height / 2, 0, 0, 1.])
+    k = np.array([camera.fx, 0, camera.cx, 0, camera.fx, camera.cy, 0, 0, 1.])
     return [(topic, msg), (info_topic, m.CameraInfo(header=header, height=camera.height, width=camera.width, k=k))]
 
 
-def stereo_points(camera, depth_mm, ns, rng):
-    """What drone_ref.stereo_node gives from the mono pair: points in the left camera's frame,
-    about half matched, 0.2-6 m (PointCloud2, x y z float32)."""
-    points = depth_points(depth_mm.astype(np.float32) / 1000., camera.fx, camera.fx, camera.cx, camera.cy,
-                          tile=camera.stride, min_depth=STEREO_RANGE[0], max_depth=STEREO_RANGE[1])
-    points = points[rng.random(len(points)) >= STEREO_DROP].astype(np.float32)
+def stereo_points(world, camera, position, rotation, ns, rng, dark_floor=False):
+    """What drone_ref.stereo_node gives from the mono pair: points in the left camera's frame
+    (PointCloud2, x y z float32), with the drone's measured coverage, noise and gaps
+    (localsim.jetson_stereo)."""
+    return points_message(jetson_stereo.points(world, camera, position, rotation, rng, dark_floor), ns)
+
+
+def points_message(points, ns):
     header = m.Header(stamp=stamp(ns), frame_id='oak_left_camera_optical_frame')
     return m.PointCloud2(header=header, width=len(points), height=1, point_step=12, row_step=12 * len(points),
                          fields=[m.PointField(name=n, offset=4 * i) for i, n in enumerate('xyz')],
