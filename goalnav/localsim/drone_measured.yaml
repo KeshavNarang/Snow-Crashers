@@ -1,0 +1,31 @@
+# What the simulator should assume, as measured on skybeta-03. One place for the numbers:
+# localsim.batch --scenario <name> turns an entry into goalrun flags. When a drone
+# measurement changes, change it here (with its source) and re-run the batch.
+#
+# Already matched in goalrun itself (no flag needed): camera pitch 27.6 deg and offset
+# (agents/logs/2026-11-07-goalnav-calibration.md, from the TF), HFOV 77.5 deg, baseline 7.5 cm.
+#
+# Keys: camera_hz, camera_latency (s, capture to points), vehicle (VehicleConfig fields).
+
+drone:
+  source: agents/logs/2026-11-07-goalnav-hardware.md, third session (goalnav stereo_node, 2 worker threads, 4.0 Hz, 234 ms old)
+  camera_hz: 4.0
+  camera_latency: 0.234
+
+drone_slow:
+  source: same log, stereo_node single-threaded (2.8 Hz); 0.4 s age is overwall's measured depth age (2026-11-07-depth-bottleneck.md, goalnav-calibration.md)
+  camera_hz: 2.8
+  camera_latency: 0.4
+
+drone_drift:
+  source: drone depth plus odometry drift x2 (0.016 m/sqrt s, 0.003 rad/sqrt s); a stress case, drift NOT measured on the drone (goalnav-calibration.md)
+  camera_hz: 4.0
+  camera_latency: 0.234
+  vehicle:
+    drift_m_per_sqrt_s: 0.016
+    yaw_drift_rad_per_sqrt_s: 0.003
+
+sim_default:
+  source: goalrun's own defaults (4.5 Hz, 0.13 s), older and kinder than the drone; for comparing with earlier runs only
+  camera_hz: 4.5
+  camera_latency: 0.13
