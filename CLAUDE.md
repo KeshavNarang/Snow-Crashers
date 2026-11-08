@@ -17,7 +17,7 @@ touching sensor code, mounts, drivers or fusion, read that first and log your wo
 
 ## Live pipeline
 
-The user confirms several successful simple `snowcrashers_nav` flights; wall crossing is also reported in the logs. Goalnav was deployed and bench-run props-off, but a successful goalnav course/cheese flight is not established. A newer branch records a team image with on-camera depth (~28 Hz), replacing earlier CPU-stereo assumptions. See [current status](docs/STATUS.md) and [camera contracts](docs/CAMERAS.md); verify the live configuration before deployment.
+The user confirms several successful simple `snowcrashers_nav` flights; wall crossing is also reported in the logs. Goalnav was deployed and bench-run props-off, but a successful goalnav course flight is not established (the cheese shortcut is dropped). A newer branch records a team image with on-camera depth (~28 Hz), replacing earlier CPU-stereo assumptions. See [current status](docs/STATUS.md) and [camera contracts](docs/CAMERAS.md); verify the live configuration before deployment.
 
 ## Required RGB for pad finding
 
@@ -152,6 +152,10 @@ the hostname does not resolve, say so; do not guess other hosts.
   session can pick up.
 - Simulate first: `goalnav/localsim` (see `goalnav/README.md`). Run `python3 -m pytest` where
   tests exist before pushing.
+- **Sims: one at a time, one run per command. No long-running loops or parallel batches** (user
+  rule, 2026-11-07). Look at each result before starting the next; fix failures one by one.
+  Put every run under one flat output folder with one index page (`localsim/live_index.py`),
+  not separate pages per batch.
 
 ## Drone lock etiquette
 `tools/drone-lock status` before anything beyond a read-only look. If another agent holds the lock, don't

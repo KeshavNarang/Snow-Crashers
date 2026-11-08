@@ -21,6 +21,7 @@ from launch.actions import DeclareLaunchArgument, ExecuteProcess, OpaqueFunction
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 # The flight interface's arguments: the organizers' example, but the altitude clamp lowered to 2.5 m for the net.
 INTERFACE = [
@@ -36,6 +37,7 @@ INTERFACE = [
 # goalnav's own arguments.
 GOALNAV = [
     ('profile', 'safe', 'risk profile, config/goalnav_profiles.yaml'),
+    ('goals_file', 'config/goals.yaml', 'the goal chain (relative: installed share/drone_ref)'),
     ('tuning', '', 'YAML overrides, e.g. "{stop_after: corridor_1, max_speed: 0.4}"'),
     ('log_dir', '~/team_ws/logs', 'one folder per launch is made in here'),
     ('record', 'true', 'record the rosbag'),
@@ -61,7 +63,7 @@ TOPICS = ['/oak/left/camera_info', '/oak/right/camera_info', '/oak/imu/data',
           '/fmu/out/vehicle_land_detected', '/fmu/out/vehicle_control_mode', '/fmu/out/estimator_status_flags',
           '/fmu/out/failsafe_flags', '/fmu/out/battery_status',
           '/skybeta/state', '/skybeta/setpoint/twist', '/skybeta/setpoint/pose',
-          '/goalnav/status', '/rosout', '/tf', '/tf_static']
+          '/goalnav/status', '/goalnav/stereo/points', '/rosout', '/tf', '/tf_static']
 
 
 def _logger(context):
@@ -99,8 +101,9 @@ def _navigation(context):
     mode = CAMERA_MODES[camera]
     goalnav = Node(package='drone_ref', executable='goalnav_node', name='drone_ref_goalnav',
                    output='screen', emulate_tty=True,
-                   parameters=[{'profile': LaunchConfiguration('profile'), 'tuning': LaunchConfiguration('tuning'),
-                                **mode['goalnav']}])
+                   # value_type=str: launch would otherwise read tuning's '{...}' as a YAML dict.
+                   parameters=[{**{name: ParameterValue(LaunchConfiguration(name), value_type=str)
+                                   for name in ('profile', 'tuning', 'goals_file')}, **mode['goalnav']}])
     stereo = Node(package='drone_ref', executable='stereo_node', name='drone_ref_stereo',
                   output='screen', emulate_tty=True)
     return [stereo, goalnav] if mode['stereo_node'] else [goalnav]

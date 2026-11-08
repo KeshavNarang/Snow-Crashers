@@ -1,5 +1,5 @@
-# Risk profiles for drone_ref.goalnav (docs/GOALNAV.md). Pick one with the
-# node's `profile` parameter (localsim: --profile); override single values
+# The risk profile for drone_ref.goalnav (docs/GOALNAV.md): `safe` only. Faster/race
+# profiles were removed on 2026-11-07: we play it safe. Override single values
 # with `tuning` (localsim: --tune key=value). Every key is a field of
 # MissionConfig, PlanConfig or FollowConfig.
 #
@@ -14,7 +14,8 @@
 
 safe:                     # reliability first: the run that must finish
   cruise_height: 1.15     # over the stands' struts; below the 1.73 m wall tops
-  max_speed: 0.6
+  pad_rest_s: 0.5        # down on the pad 0.5 s, then climb: PX4 auto-disarms after 2 s landed
+  max_speed: 0.4         # slow: Jetson depth ~3-4 Hz, 0.4 s old (2026-11-07); was 0.6
   radius: 0.42
   hard_radius: 0.33       # body + 5 cm: the map is a few cm off a real tarp
   soft: 0.80
@@ -29,26 +30,3 @@ safe:                     # reliability first: the run that must finish
   max_accel: 1.5
   cross_track_gain: 1.5
 
-normal:                   # a middle setting
-  cruise_height: 1.10
-  max_speed: 1.3
-  radius: 0.35
-  hard_radius: 0.30
-  soft: 0.65
-  net_margin: 0.10
-  turn_speed: 0.45
-  braking: 2.2
-  kind_speed: {tube: 0.55, opening: 0.35, gap: 0.6, pad: 0.6}
-  repel_reach: 0.42
-
-fast:                     # a scored attempt once a safe run is banked
-  cruise_height: 1.05
-  max_speed: 1.8
-  radius: 0.33
-  hard_radius: 0.29
-  soft: 0.6
-  net_margin: 0.08
-  turn_speed: 0.6
-  braking: 2.8
-  kind_speed: {tube: 0.7, opening: 0.4, gap: 0.8, pad: 0.7}
-  repel_reach: 0.40

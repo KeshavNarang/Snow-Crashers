@@ -207,7 +207,7 @@ class Simulation:
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--params', action='append', default=None,
-                        help='parameter YAML; repeat to overlay (default: config/sim.yaml + config/race.yaml)')
+                        help='parameter YAML; repeat to overlay (default: config/sim.yaml)')
     parser.add_argument('--world', choices=sorted(WORLDS), default='hardware',
                         help='camera model: the real OAK-D (hardware) or the lab preset')
     parser.add_argument('--set', action='append', default=[], metavar='NODE.PARAM=VALUE')
@@ -225,12 +225,12 @@ def main(argv=None):
     parser.add_argument('--fastest', type=float, default=None, help='fastest finish to score against')
     parser.add_argument('--out', default=str(ROOT / 'localsim/out'))
     parser.add_argument('--px4', action='store_true',
-                        help='fly real PX4 1.16 SITL on the rigid-body model (localsim/px4, docs/LOCAL_SIM.md)')
+                        help='fly real PX4 1.16 SITL on the rigid-body model (localsim/px4)')
     parser.add_argument('--px4-params', action='append', default=[], metavar='FILE',
-                        help='PX4 parameter file to apply, e.g. config/px4_race.params; repeatable')
+                        help='PX4 parameter file to apply; repeatable')
     parser.add_argument('--px4-instance', type=int, default=0, help='PX4 instance (ports 4560+N, 14540+N)')
     args = parser.parse_args(argv)
-    args.params = args.params or [str(ROOT / 'config/sim.yaml'), str(ROOT / 'config/race.yaml')]
+    args.params = args.params or [str(ROOT / 'config/sim.yaml')]
     for key, value in WORLDS[args.world].items():
         if getattr(args, key) is None:
             setattr(args, key, value)

@@ -15,11 +15,11 @@ CAD-replay race stack did not). ROS 2 package name: `drone_ref`.
 | `drone_ref/stereo_node.py` | Depth and the rectified left image from the OAK-D's mono pair (overwall_nav's `StereoRig`), drone only |
 | `launch/goalnav.launch.py` | flight_interface, stereo_node, goalnav_node and the logger (`~/team_ws/logs`) |
 | `config/goals.yaml` | The course as a chain of goals, plus course facts (net anchors, return mark and corner, takeoff offset) |
-| `config/goalnav_profiles.yaml` | Risk profiles: `safe`, `normal`, `fast` |
+| `config/goalnav_profiles.yaml` | Risk profile: `safe` only (faster/race profiles removed: we play it safe) |
 | `localsim/` | The as-built course simulator (`goalrun.py`), 3D viewer, run index |
 | `assets/course-scan.npz` | The 2026-11-06 phone scan, aligned to the nets, cropped (made by `tools/course_scan.py`) |
 | `tools/course_map.py` | The labelled course map (scan, goal chain, one run, window elevation, drone side view) |
-| `docs/GOALNAV.md`, `docs/LOCAL_SIM.md` | Design notes (written before the scan; see "Since the notes" below) |
+| `docs/GOALNAV.md` | Design notes (written before the scan; see "Since the notes" below) |
 | `docs/organizer/` | The organizers' rules, hardware notes and AI context |
 
 ## Simulate
