@@ -100,6 +100,27 @@ class MissionConfig:
     repel_limit: float = 0.6
 
 
+def free_target(live_map, clear, target, need, search):
+    """``target`` if the map leaves ``need`` clearance there, else the nearest point within ``search``
+    that does (None if none). A waypoint chained from earlier estimates can land on an obstacle and
+    leave the planner with no path (seed 705, window_lookout)."""
+    ij = live_map.cell(np.asarray(target, float))
+    if live_map.inside(ij) and clear[ij[0], ij[1]] >= need:
+        return np.asarray(target, float)
+    r = int(math.ceil(search / live_map.res))
+    di, dj = np.mgrid[-r:r + 1, -r:r + 1]
+    keep = np.hypot(di, dj) * live_map.res <= search
+    ii, jj = ij[0] + di[keep], ij[1] + dj[keep]
+    ok = (ii >= 0) & (jj >= 0) & (ii < live_map.n) & (jj < live_map.n)
+    ii, jj = ii[ok], jj[ok]
+    good = clear[ii, jj] >= need
+    if not good.any():
+        return None
+    d = np.hypot(ii[good] - ij[0], jj[good] - ij[1])
+    k = int(np.argmin(d))
+    return live_map.centre_of(np.array([ii[good][k], jj[good][k]]))
+
+
 class VisionGuard:
     """Hold still while PX4 dead-reckons, and for ``hold_s`` once vision is back; flag the estimate's
     jumps (xy resets) once each. A lapse ending just before the window let the sim fly into its
@@ -498,6 +519,8 @@ class GoalMission:
             targets = [goal.estimate]            # Arrive there; the lookahead would turn early.
         if goal is not None and goal.kind == 'pad' and goal.detected is None and self.pad_lookout < len(goal.lookouts):
             targets = [route.lookout(goal, self.pad_lookout)]      # Not seen yet: to where it can be.
+        if not (goal is not None and goal.kind in ('pad', 'reach')):
+            targets = [self._free_waypoint(g, q, clear) for g, q in zip(route.upcoming(2), targets)]
         tight = [(g.estimate, g.axis, 0.45) for g in route.upcoming(3)
                  if g.kind == 'opening' and g.detected is not None and g.axis is not None]
         legs = route.upcoming(2) if not (goal is not None and goal.kind in ('pad', 'reach')) else [goal]
@@ -511,6 +534,19 @@ class GoalMission:
                 self.speed = min(self.speed, self._goal_speed(p))
         else:
             self.speed, self.free_ahead = 0., 0.
+
+    def _free_waypoint(self, goal, target, clear):
+        """A waypoint or gap (not anchored, not the tunnel or window) on or beside an obstacle: aim for
+        clear space within 0.6 m instead (seed 705: no path to window_lookout, and in another run to
+        m1_end, for 25-45 s, then an abort)."""
+        if goal.kind not in ('waypoint', 'gap') or goal.anchor is not None:
+            return target
+        found = free_target(self.map, clear, target, need=self.planner.cfg.hard_radius + 0.05, search=0.6)
+        if found is None:
+            return target
+        if float(np.linalg.norm(found - target)) > 0.02:
+            goal.detected = found                 # passing it, and the goals chained after it, follow
+        return found
 
     def _goal_speed(self, p, deceleration=0.8):
         """Each kind of goal has a speed to pass it at (slow through the
