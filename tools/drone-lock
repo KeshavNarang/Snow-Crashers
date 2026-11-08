@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Advisory lock on the shared drone, stored on the drone itself so every machine sees it.
+#   tools/drone-lock acquire "<who>" "<doing what>" | release | status
+set -euo pipefail
+d="$(dirname "$0")/drone"
+case "${1:-status}" in
+  acquire)
+    "$d" run "if [ -e /tmp/agent.lock ]; then echo LOCKED:; cat /tmp/agent.lock; exit 1; fi; printf '%s | %s | %s\n' \"\$(date -Is)\" '${2:?who}' '${3:?what}' > /tmp/agent.lock; echo acquired" ;;
+  release) "$d" run 'rm -f /tmp/agent.lock; echo released' ;;
+  status)  "$d" run 'cat /tmp/agent.lock 2>/dev/null || echo free' ;;
+  *) sed -n 2,3p "$0"; exit 1 ;;
+esac
