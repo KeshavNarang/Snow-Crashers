@@ -75,7 +75,7 @@ value.
 
 - **A safety pilot on RC is always there**, and can take the vehicle back at any time. Nothing
   you write may assume otherwise.
-- **Run new code with the props off first**, then low and tethered. The team has completed several successful simple real flights; a new goalnav/cheese mission still needs its own validation.
+- **Run new code with the props off first**, then low and tethered. The team has completed several successful simple real flights; a new goalnav mission still needs its own validation.
 - **Do not publish to `/fmu/in/*`** and do not modify `skybeta_flight_interface`. Send setpoints
   through `/skybeta/setpoint/*`.
 - **Do not change `DRONE_ID`, `ROS_DOMAIN_ID` or `TEAM`** in `/etc/skybeta/drone.env`, or the

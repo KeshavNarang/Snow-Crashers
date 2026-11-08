@@ -15,7 +15,7 @@ There is **always a safety pilot on RC**. They arm the vehicle, then switch to P
 
 > **What has and has not been proven.** Tested on the bench: the full VIO stack, position
 > estimates reaching the flight controller, and Position mode becoming available on drone 16.
-> **Historical organizer validation scope:** hover, Offboard takeoff and handover had not yet been flown when this guide was written. The team has since completed several successful simple flights. This does not validate a new goalnav/cheese mission; rehearse changes with props off before flight.
+> **Historical organizer validation scope:** hover, Offboard takeoff and handover had not yet been flown when this guide was written. The team has since completed several successful simple flights. This does not validate a new goalnav mission; rehearse changes with props off before flight.
 
 ---
 

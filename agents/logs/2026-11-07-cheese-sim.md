@@ -72,3 +72,9 @@ px4_link false. Sim now runs --colour --camera-hz 3.0 --camera-latency 0.4.
   cuVSLAM 32 Hz, load ~5.5. Sim assumption (2.8 Hz, 0.4 s) holds.
 - goalnav's stereo_node could not be run: drone_ref is not built in the current workspace.
 - Return spot: M1 offset 0.70 m (halfway to the west net); sim v9 tips 0.21 m off the net.
+
+## 2026-11-08: cheese dropped
+
+Team decision: go for the full course. The cheese launch, goals, experiment and eval were
+removed (PR #24); this log is kept as the record. The safety fixes found here (pad touchdown,
+return spot, Jetson depth, slower profile) stay in goalnav.
