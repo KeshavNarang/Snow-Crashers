@@ -73,7 +73,7 @@ class GoalNavNode(Node):
         self.position = self.attitude = self.status = self.land = None
         self.camera = None
         qos = qos_profile_sensor_data
-        self.create_subscription(VehicleLocalPosition, '/fmu/out/vehicle_local_position_v1', self._position, qos)
+        self.create_subscription(VehicleLocalPosition, '/fmu/out/vehicle_local_position', self._position, qos)
         self.create_subscription(VehicleAttitude, '/fmu/out/vehicle_attitude', self._attitude, qos)
         self.create_subscription(VehicleStatus, '/fmu/out/vehicle_status_v1', self._status, qos)
         self.create_subscription(VehicleLandDetected, '/fmu/out/vehicle_land_detected', self._land, qos)

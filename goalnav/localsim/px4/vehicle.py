@@ -293,7 +293,7 @@ class PX4Vehicle:
         resets = self.resets.counts
         height = self.body.p[2] - self.cfg.body_height + 0.0007
         range_valid = bool(height >= self.cfg.range_min_m)
-        self.bus.publish('/fmu/out/vehicle_local_position_v1', m.VehicleLocalPosition(
+        self.bus.publish('/fmu/out/vehicle_local_position', m.VehicleLocalPosition(
             timestamp=us, timestamp_sample=self._sample_us(local), x=local.x, y=local.y, z=local.z,
             vx=local.vx, vy=local.vy, vz=local.vz, heading=_yaw_of(q),
             xy_valid=bool(flags & EST.ESTIMATOR_POS_HORIZ_REL), z_valid=bool(flags & EST.ESTIMATOR_POS_VERT_ABS),
@@ -321,7 +321,7 @@ class PX4Vehicle:
         if self._latest('EXTENDED_SYS_STATE') is not None:
             self.bus.publish('/fmu/out/vehicle_land_detected', m.VehicleLandDetected(timestamp=us, landed=self.landed))
         if system is not None:
-            self.bus.publish('/fmu/out/battery_status_v1', m.BatteryStatus(
+            self.bus.publish('/fmu/out/battery_status', m.BatteryStatus(
                 timestamp=us, remaining=max(0., system.battery_remaining / 100.), connected=True))
 
     def close(self):

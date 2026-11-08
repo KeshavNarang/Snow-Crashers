@@ -405,7 +405,7 @@ class Vehicle:
         velocity = self._to_local(self.v) + self.rng.normal(0., 0.003, 3)
         height = self.p[2] - self.ground + 0.0007
         range_valid = height >= cfg.range_min_m
-        self.bus.publish('/fmu/out/vehicle_local_position_v1', m.VehicleLocalPosition(
+        self.bus.publish('/fmu/out/vehicle_local_position', m.VehicleLocalPosition(
             timestamp=us, timestamp_sample=us, x=float(estimate[0]), y=float(estimate[1]),
             z=float(estimate[2]), vx=float(velocity[0]), vy=float(velocity[1]), vz=float(velocity[2]),
             heading=float(self.heading() + self.yaw_drift), eph=cfg.eph,
@@ -422,5 +422,5 @@ class Vehicle:
             failsafe=self.failsafe))
         self.bus.publish('/fmu/out/vehicle_land_detected', m.VehicleLandDetected(
             timestamp=us, landed=self.landed))
-        self.bus.publish('/fmu/out/battery_status_v1', m.BatteryStatus(
+        self.bus.publish('/fmu/out/battery_status', m.BatteryStatus(
             timestamp=us, remaining=float(self.battery), connected=True))
