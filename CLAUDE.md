@@ -16,6 +16,23 @@ touching sensor code, mounts, drivers or fusion, read that first and log your wo
 
 The pipeline that actually flies on skybeta-03 is `team_ws/src/overwall_nav` (and `snowcrashers_nav`), run through the organizers' `flight_interface`. `goalnav/` is simulator-only so far. Depth is computed on the Jetson CPU from the mono pair (about 3 Hz, ~0.4 s old); see `agents/logs/2026-11-07-depth-bottleneck.md`.
 
+## Evals first (the workflow)
+
+Write the eval before the code. For every fix or feature:
+1. **Write the eval first** and run it on the current code. It must fail for the right reason.
+   For a bug, build a case that reproduces what was seen on the drone, and add a check that the
+   old behaviour really is the bug, so the eval cannot pass by accident.
+2. **Then build the fix**, the smallest change that turns the evals green. Don't change a test to
+   fit the code.
+3. **Keep the old behaviour covered** (backward compatibility) and add a case for what must not
+   happen (e.g. the fix hiding a real fault).
+4. **Run the whole suite** before committing, and again on the drone's own Python if the change
+   touches the Jetson (tests under `team_ws/src/overwall_nav/test/`, `tools/drone_tools/`).
+5. **Measure on the drone** only after the evals pass, and record numbers in `agents/logs/`.
+   A measurement taken in the first ~5 minutes after boot is warm-up, not steady state.
+Use a git worktree (`git worktree add ../<name> -b agent/<topic> origin/main`) rather than
+switching branches in the shared checkout; other sessions work in it.
+
 ## Our test drone
 
 `skybeta-03.local`, user `dronehacks`. **Only ever connect to this drone.** SSHing into any other
