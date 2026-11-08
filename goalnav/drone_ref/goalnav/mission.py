@@ -24,6 +24,7 @@ from drone_ref.goalnav.goals import Route, opening_axis, refine, wall_line, wall
 from drone_ref.goalnav.floor_line import LineMap, turn_along
 from drone_ref.goalnav.livemap import OCCUPIED as OCCUPIED_LOGODDS, Fence, LiveMap
 from drone_ref.goalnav.planner import Planner, clearance
+from drone_ref.goalnav.return_spot import ReturnSpot
 from drone_ref.goalnav.window import WindowManeuver
 
 SET_MODE, ARM, LAND = 176, 400, 21
@@ -154,12 +155,14 @@ class GoalMission:
         right, ahead = self.spec.get('return_offset', (0., 0.))
         c, s = math.cos(yaw_of(telemetry.rotation)), math.sin(yaw_of(telemetry.rotation))
         self.return_xy = self.home + right * np.array([s, -c]) + ahead * np.array([c, s])
+        self.return_spot = None             # built with the route (below)
         # Climbing, held a little off where it sits (goals.yaml takeoff_offset,
         # [right, ahead]): the barrier is just behind the mark, the net to its left.
         t_right, t_ahead = self.spec.get('takeoff_offset', (0., 0.))
         self.takeoff_xy = p[:2] + t_right * np.array([s, -c]) + t_ahead * np.array([c, s])
         yaw = yaw_of(telemetry.rotation)
         self.route = Route(self.spec, p[:2], yaw)
+        self.return_spot = ReturnSpot(self.route, self.return_xy, self.spec.get('return_walls', []))
         face = self.spec.get('return_face')
         self.return_face = self.route.cad_point(face) if face is not None else None
         self.map = LiveMap(self.route.net_centre(), floor_z)
@@ -219,6 +222,8 @@ class GoalMission:
     def add_depth(self, origin, points):
         if self.map is not None and self.state not in ('IDLE', 'DONE'):
             self.map.insert(origin, points)
+            if self.state in ('RETURN', 'RETURN_DESCEND'):
+                self._observe_return(origin, points)
             goal = self.route.current if self.route else None
             if goal is not None and goal.kind == 'opening' and self.window.active_for(goal):
                 h = self.floor.floor_z + self._goal_height(goal)
@@ -231,6 +236,19 @@ class GoalMission:
                 if sill is not None:
                     # The middle of even the smallest window (0.62 m tall) over its sill.
                     goal.pass_height = float(sill - self.floor.floor_z + self.cfg.window_rise)
+
+    def _observe_return(self, origin, points):
+        """Move the touchdown spot toward where the walls by the mark, seen
+        now, put it (``return_spot``), a little at a time."""
+        spot = self.return_spot
+        if self.telemetry is None or self.floor.height(self.telemetry.position[2]) < 0.6:
+            return                            # Low down it sees tarp skirts, not faces: keep the spot.
+        was = spot.measured()
+        spot.observe(np.asarray(origin, float), np.asarray(points, float), self.floor.floor_z)
+        self.return_xy = self.return_xy + 0.2 * (spot.target() - self.return_xy)
+        if not was and spot.measured():
+            shift = spot.target() - spot.base
+            self.status.events.append((round(self.telemetry.t, 3), 'return spot', f'{shift[0]:+.2f} {shift[1]:+.2f}'))
 
     def add_range(self, telemetry, distance):
         if self.floor is None or telemetry.landed:
@@ -851,7 +869,7 @@ class GoalMission:
         grid, profile = self.return_profile
         h = self.floor.height(t.position[2])
         wanted = float(np.interp(np.clip(s + np.array([0., 0.15, 0.3, 0.45]), 0., length), grid, profile).max())
-        speed = min(cfg.return_speed, math.sqrt(2. * cfg.return_brake * max(left, 0.)))
+        speed = min(cfg.return_speed, math.sqrt(2. * cfg.return_brake * max(left - self._return_short(t, left), 0.)))
         below = wanted - h
         if below > 0.05:                  # Climbing: no faster along than the climb keeps up with.
             speed = min(speed, 0.8 * self.follower.cfg.max_climb / cfg.return_slope)
@@ -870,6 +888,18 @@ class GoalMission:
             self._enter('RETURN_DESCEND', t.t)
         return Setpoint(np.array([*(tangent * speed), vz]), self.follower.yaw, position=position,
                         acceleration=np.array([*np.clip(accel, -2., 2.), az])), []
+
+    def _return_short(self, t, left, short=0.4, wait_s=3.):
+        """How far short of the touchdown spot to stop: ``short`` until the
+        walls by the mark are measured (the remembered spot is off by the
+        drift, the net just past it), for at most ``wait_s`` stopped there."""
+        if self.return_spot.measured() or not self.return_spot.walls:
+            return 0.
+        if left > short + 0.05:
+            self.return_wait_since = None
+        elif getattr(self, 'return_wait_since', None) is None:
+            self.return_wait_since = t.t
+        return short if self.return_wait_since is None or t.t - self.return_wait_since < wait_s else 0.
 
     def _return_yaw(self, p):
         """Facing the corner by the launch mark (goals.yaml ``return_face``):

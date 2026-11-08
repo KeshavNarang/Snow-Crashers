@@ -76,7 +76,14 @@ VL53L1X ──────► floor height (gated) ─────────�
   rather than hovering.
 - **Finish.** Over the pad (from a pad detector, below) it descends and disarms
   for CP5. It then re-arms, climbs to 2.1 m, flies straight over the barrier
-  to its takeoff point and lands, for the return bonus.
+  toward its takeoff point and lands, for the return bonus. By then the
+  odometry has drifted up to ~0.2 m, and the launch corridor leaves ~0.25 m a
+  side to the nearly invisible west net. So the touchdown spot is set from
+  M1's corridor face and the barrier's north face, measured from depth seen on
+  the way back (`return_spot.py`, goals.yaml `return_walls`): 0.50 m from M1,
+  0.60 m from the barrier, at most 0.3 m from the remembered spot. Until both
+  are measured it stops 0.4 m short (for up to 3 s), and it keeps the spot
+  once below 0.6 m, where tarp skirts would fool the fit.
 
 `drone_ref/goalnav_node.py` is the ROS 2 adapter:
 - **Subscribes:** PX4 local position, attitude, status and land detector;

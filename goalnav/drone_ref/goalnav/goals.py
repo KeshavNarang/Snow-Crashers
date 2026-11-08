@@ -255,16 +255,21 @@ def wall_offset(route, live_map, cad_a, cad_b, z_low, z_high, window=0.35, min_c
     puts it, along the CAD wall's left normal: the median signed distance of
     the occupied cells near it. None until enough of it has been seen."""
     a, b = route.cad_point(cad_a), route.cad_point(cad_b)
-    along = (b - a) / np.linalg.norm(b - a)
-    normal = np.array([-along[1], along[0]])
     cells = np.argwhere(live_map.blocked(z_low, z_high))
     if len(cells) < min_cells:
         return None
-    xy = live_map.centre_of(cells)
-    u = (xy - a) @ along
-    d = (xy - a) @ normal
+    return near_face(live_map.centre_of(cells), a, b, window, min_cells)
+
+
+def near_face(xy, a, b, window, min_points):
+    """Signed distance (along the left normal of a -> b) of a straight wall's
+    face from the line a-b, from points near it (between its ends, within
+    ``window`` across); None with fewer than ``min_points``."""
+    along = (b - a) / np.linalg.norm(b - a)
+    normal = np.array([-along[1], along[0]])
+    u, d = (xy - a) @ along, (xy - a) @ normal
     near = (u > 0.) & (u < np.linalg.norm(b - a)) & (np.abs(d) < window)
-    if near.sum() < min_cells:
+    if near.sum() < min_points:
         return None
     # Its near face, not the median: struts, battens and tarp bulges stand off
     # the face toward the side the drone sees it from, never the other way.
