@@ -3,14 +3,23 @@
 #   tools/drone run 'hostname; ros2 topic list'
 #   tools/drone shell
 #   tools/drone push LOCAL REMOTE   |   tools/drone pull REMOTE LOCAL
-# Credentials come from .secrets/skybeta-03.env (gitignored). Never print or commit them.
+# Password: $DRONE_PASS if set (tools/fly asks once), else .secrets/skybeta-03.env if it exists,
+# else it asks (hidden). The password comes from the organizers. Never print or commit it.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
-# shellcheck disable=SC1091
-source "$root/.secrets/skybeta-03.env"
+DRONE_HOST=skybeta-03.local DRONE_USER=dronehacks
+if [ -z "${DRONE_PASS:-}" ] && [ -f "$root/.secrets/skybeta-03.env" ]; then
+  # shellcheck disable=SC1091
+  source "$root/.secrets/skybeta-03.env"
+fi
 [ "$DRONE_HOST" = "skybeta-03.local" ] || { echo "refusing: not our drone" >&2; exit 2; }
+if [ -z "${DRONE_PASS:-}" ]; then
+  read -rsp "skybeta-03 password (user dronehacks): " DRONE_PASS </dev/tty; echo >&2
+fi
+export DRONE_PASS
+# ssh reads the password from this helper, which prints it from memory (nothing written to disk).
 askpass="$(mktemp)"; trap 'rm -f "$askpass"' EXIT
-printf '#!/bin/sh\necho "%s"\n' "$DRONE_PASS" > "$askpass"; chmod 700 "$askpass"
+printf '#!/bin/sh\nprintf "%%s\n" "$DRONE_PASS"\n' > "$askpass"; chmod 700 "$askpass"
 export SSH_ASKPASS="$askpass" SSH_ASKPASS_REQUIRE=force DISPLAY=:0
 opts=(-o StrictHostKeyChecking=accept-new -o PubkeyAuthentication=no -o PreferredAuthentications=password,keyboard-interactive -o ConnectTimeout=8)
 cmd="${1:-}"; shift || true
