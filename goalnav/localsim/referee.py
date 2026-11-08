@@ -144,8 +144,11 @@ class Referee:
             return
         if elapsed > TIME_LIMIT:
             self.return_failed = 'over the 3-minute limit'
-        elif contacts and not self.in_contact and math.hypot(*velocity[:2]) > self.crash_speed:
-            self.return_failed = f'hit an obstacle at {math.hypot(*velocity[:2]):.2f} m/s'
+        elif contacts and not self.in_contact:      # any touch on the way back fails the return
+            speed = math.hypot(*velocity[:2])
+            self.touches.append((elapsed, speed, now))
+            self.return_failed = (f'hit an obstacle at {speed:.2f} m/s' if speed > self.crash_speed
+                                  else f'touched an obstacle on the return at {speed:.2f} m/s')
         elif landed and not armed:
             self.return_distance = math.dist(xy, self.launch)
             if self.return_distance <= RETURN_TOLERANCE:
