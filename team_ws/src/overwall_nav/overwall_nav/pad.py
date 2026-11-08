@@ -7,7 +7,10 @@ the orange floor tarp's colour cut out. Each frame:
 1. pixels whose chromaticity is common on the mat (``PadFinder.mask``);
 2. 4-connected blobs of them (the white arcs and grey H are holes);
 3. each blob pixel's ray cast onto the floor, in the camera's level frame (F forward, L left),
-   for a camera ONE metre above the floor, weighted by the floor area it covers.
+   for a camera ONE metre above the floor, weighted by the floor area it covers;
+4. its shape: the mat is a SOLID, SQUARE patch (its H and arcs are holes inside it). Something as
+   blue but thin and open -- a ladder's rails and rungs -- fills little of its own convex hull
+   (solidity) and is long and narrow. pick_pad refuses both.
 
 Floor positions scale with the camera's height, so ``candidates`` needs no height: the mission,
 which knows it, scales them and checks the size (``pick_pad``). A mono image finds nothing: in
@@ -33,6 +36,8 @@ class PadConfig:
     min_side: float = 0.45         # a blob cut off by the frame still counts if this wide ...
     max_side: float = 1.25
     min_pixels: int = 25           # ... but its centre is used only if it is >= 0.8 mat_size both ways
+    min_solidity: float = 0.55     # blob pixels / their convex hull's area (mat ~0.8, ladder ~0.3)
+    min_squareness: float = 0.6    # short side / long side on the floor (mat ~1 at any rotation)
     threshold: float = 0.35        # of the colour model's peak
     max_width: int = 160           # work on an image this wide at most (speed)
 
@@ -96,7 +101,8 @@ class PadFinder:
                            or pixels[:, 0].max() == mask.shape[0] - 1 or pixels[:, 1].max() == mask.shape[1] - 1)
             found.append({'centre': [float(centre[0]), float(centre[1])],
                           'sides': [float(spread.min()), float(spread.max())],
-                          'touches': touches, 'pixels': int(len(pixels))})
+                          'touches': touches, 'pixels': int(len(pixels)),
+                          'solidity': round(solidity(pixels), 3)})
         return found
 
 
@@ -111,11 +117,41 @@ def pick_pad(candidates, cam_height, config=None):
             continue
         if c.get('touches') and short < 0.8 * cfg.mat_size:
             continue                                         # cut off: its centre is not the mat's
+        if c.get('solidity', 1.0) < cfg.min_solidity:
+            continue                                         # open, like a ladder: not the solid mat
+        if not c.get('touches') and short < cfg.min_squareness * long_:
+            continue                                         # long and narrow: not the square mat
         if best is None or c.get('pixels', 0) > best.get('pixels', 0):
             best = c
     if best is None:
         return None
     return (float(best['centre'][0]) * cam_height, float(best['centre'][1]) * cam_height)
+
+
+def solidity(pixels):
+    """Pixel count / area of the convex hull of the pixels' squares (1 = convex and filled)."""
+    i, j = pixels[:, 0].astype(float), pixels[:, 1].astype(float)
+    corners = np.unique(np.concatenate([np.column_stack([i + a, j + b]) for a in (0, 1) for b in (0, 1)]), axis=0)
+    hull = _hull(corners)
+    x, y = hull[:, 0], hull[:, 1]
+    area = 0.5 * abs(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1)))
+    return float(len(pixels) / area) if area > 0 else 1.0
+
+
+def _hull(points):
+    """Convex hull (Andrew's monotone chain) of sorted unique 2-D points, counter-clockwise."""
+    pts = points[np.lexsort((points[:, 1], points[:, 0]))]
+
+    def half(seq):
+        out = []
+        for p in seq:
+            while len(out) >= 2 and ((out[-1][0] - out[-2][0]) * (p[1] - out[-2][1])
+                                     - (out[-1][1] - out[-2][1]) * (p[0] - out[-2][0])) <= 0:
+                out.pop()
+            out.append(p)
+        return out
+    lower, upper = half(pts), half(pts[::-1])
+    return np.array(lower[:-1] + upper[:-1])
 
 
 def _blur(h):
