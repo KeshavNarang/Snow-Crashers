@@ -18,6 +18,17 @@ Run the commands from the repo folder in **Git Bash** on your laptop.
   won't be asked.)
 - `git checkout main && git pull` so you fly the latest code.
 
+## The cheese run (over the barrier, find the H, land)
+
+Over USB, put `DRONE_HOST=192.168.55.1` in front of each command (Wi-Fi needs nothing).
+
+1. `tools/fly camera "<your name>"`: copies the team camera config (`rgbd`: colour + on-camera
+   depth) and builds the team image. Power-cycle, wait ~3 min.
+2. `tools/fly deploy "<your name>" cheese`: copies goalnav and picks `cheese.launch.py`
+   (colour pad camera, cruise 2.25 m, no return, disarms on the pad). Power-cycle, wait ~3 min.
+3. `tools/fly check`: the camera pipeline must PASS (rgbd), PX4 link up, goalnav status printed.
+4. Pilot: Altitude, arm, Position. Kill switch in hand. Then `tools/fly logs`, `tools/fly done`.
+
 ## The four commands
 
 | Command | What it does |
