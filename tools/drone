@@ -16,6 +16,7 @@ opts=(-o StrictHostKeyChecking=accept-new -o PubkeyAuthentication=no -o Preferre
 cmd="${1:-}"; shift || true
 case "$cmd" in
   run)   ssh "${opts[@]}" "$DRONE_USER@$DRONE_HOST" "$@" ;;
+  runt)  ssh -t "${opts[@]}" "$DRONE_USER@$DRONE_HOST" "$@" ;;   # run with a terminal (sudo prompts)
   shell) ssh -t "${opts[@]}" "$DRONE_USER@$DRONE_HOST" ;;
   push)  scp -r "${opts[@]}" "$1" "$DRONE_USER@$DRONE_HOST:$2" ;;
   pull)  scp -r "${opts[@]}" "$DRONE_USER@$DRONE_HOST:$1" "$2" ;;
