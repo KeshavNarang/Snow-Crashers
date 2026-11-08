@@ -88,7 +88,8 @@ goals:
 # ~0.3 m south of the CAD and the tarp reach 0.4 m out (sim seed 19 climbed into it at -0.80).
   - {id: tunnel_inside,  kind: tube,     at: [2.20, 0.46],   heading: -90, across: 0.40, along: 0.4, height: 0.8}
   - {id: tunnel_exit,    kind: waypoint, at: [2.20, -1.05],  heading: -90, across: 0.40, along: 0.2, checkpoint: CP3, height: 0.8}
-  - {id: south_turn,     kind: waypoint, at: [2.10, -1.70],  heading: 200, across: 0.40, along: 0.3}
+# south_turn: 1 ft (0.305 m) further south than before (team, 2026-11-08: the corner changed).
+  - {id: south_turn,     kind: waypoint, at: [2.10, -2.005], heading: 200, across: 0.40, along: 0.3}
 
 # CP4 through the window (+5 points), then the landing. The window legs are
 # `confine`d to their straight line: never around the wall, even if it looks shut.
