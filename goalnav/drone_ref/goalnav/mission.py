@@ -72,7 +72,8 @@ class MissionConfig:
     pad_look_aside_deg: float = 30. # on the way, turn the camera toward the mat's corner at most this far off the travel
                                     # direction (it must still see where it goes: a wall end it never saw is not mapped)
     pad_need: float = 0.45          # touch down this clear of anything mapped low beside the mat ...
-    pad_reach: float = 0.2          # ... moving at most this far off the H for it (rocks stand >= 0.40 m off)
+    pad_reach: float = 0.1          # ... moving at most this far off the H for it: rocks stand >= 0.40 m off it,
+                                    # all round, so moving off one approaches another (whose far side is unseen)
     handover_height: float = 1.0    # climb straight up (stiff hold) to here, then navigate: low down, the
                                     # stands' struts and feet crowd the start and the camera cannot see behind
     sill_clearance: float = 0.14    # through a window: skids this far over its sill
