@@ -7,6 +7,11 @@
 #   tools/fly done                   put Luke's overwall_nav back (asks sudo) and release the lock
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"; d="$root/tools/drone"; cd "$root"
+# Ask for the drone password once (unless .secrets/skybeta-03.env exists); kept in memory only.
+if [ -z "${DRONE_PASS:-}" ] && [ ! -f .secrets/skybeta-03.env ]; then
+  read -rsp "skybeta-03 password (user dronehacks, from the organizers): " DRONE_PASS </dev/tty; echo >&2
+  export DRONE_PASS
+fi
 host=$("$d" run hostname)
 [ "$host" = "skybeta-03" ] || { echo "STOP: connected to '$host', not skybeta-03. Disconnect."; exit 2; }
 in_stack() { "$d" run "docker exec skybeta-stack bash -c \"source skybeta_env.sh >/dev/null 2>&1; $1\""; }
