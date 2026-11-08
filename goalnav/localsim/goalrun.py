@@ -54,7 +54,7 @@ POINTS_TOPIC = '/goalnav/stereo/points'
 # OAK-D's own depth (it cost PX4 its VIO fusion on skybeta-03).
 SIM_CAMERAS = {
     'rgbstereo': {'hz': 4.5, 'latency': 0.13,
-                  'goalnav': {'depth_topic': '', 'points_topic': POINTS_TOPIC,
+                  'goalnav': {'depth_topic': '', 'points_topic': POINTS_TOPIC, 'image_topic': '',
                               'pad_image_topic': RGB_TOPIC, 'pad_info_topic': RGB_INFO_TOPIC}},
     'rgbd': {'hz': 10., 'latency': 0.1,
              'goalnav': {'depth_topic': DEPTH_TOPIC, 'points_topic': '',
