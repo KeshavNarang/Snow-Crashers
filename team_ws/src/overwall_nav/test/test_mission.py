@@ -628,9 +628,13 @@ class OverWallTest(unittest.TestCase):
         # autonomous mission would creep at the wall and climb over it).
         def operator(t, phase, w):
             return {'sticks': [0.0, 0.0, 0.0], 'events': []}
-        w = World(**self.COURSE_WALL, remote=operator, params=self.MANUAL).run(60.0)
+        # Asked 2026-11-08: the take-off goes to 1 m. Uses the flown settings file.
+        import yaml
+        cfg = yaml.safe_load(open(HERE.parent / 'config' / 'overwall.yaml'))['overwall_mission']['ros__parameters']
+        params = dict(self.MANUAL, cruise_height_m=cfg['cruise_height_m'])
+        w = World(**self.COURSE_WALL, remote=operator, params=params).run(60.0)
         self.assertEqual(w.mission.phase, 'MANUAL', w.log())
-        self.assertAlmostEqual(w.p[2], 0.7, delta=0.12, msg=w.log())
+        self.assertAlmostEqual(w.p[2], 1.0, delta=0.12, msg=w.log())
         self.assertLess(math.hypot(w.p[0] - w.origin[0], w.p[1] - w.origin[1]), 0.1, w.log())
         self.assertEqual(w.contacts, 0, w.log())
 
