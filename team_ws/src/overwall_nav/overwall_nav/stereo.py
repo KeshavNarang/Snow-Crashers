@@ -21,6 +21,7 @@ job on the Jetson from what it does publish:
    height: a check on the mount angle.
 """
 import math
+import time
 
 import cv2
 import numpy as np
@@ -134,7 +135,7 @@ class StereoRig:
 
     def __init__(self, k_left, k_right, size, r, t, scale=0.5, d_left=None, d_right=None,
                  num_disparities=96, block=7, row_span=(0.0, 0.9), step=2, max_range_m=6.0,
-                 texture_min=10.0, saturation_px=3):
+                 texture_min=10.0, saturation_px=3, matcher='sgbm'):
         self.num_disparities, self.block = num_disparities, block
         self.texture_min, self.saturation_px = float(texture_min), saturation_px
         w, h = int(round(size[0] * scale)), int(round(size[1] * scale))
@@ -157,7 +158,14 @@ class StereoRig:
         self.rows = (int(row_span[0] * h), int(row_span[1] * h))
         self.cols = (num_disparities, w)          # no match possible left of this
         self.step = step
-        self.matcher = _matcher(num_disparities, block)
+        if matcher == 'sgbm':
+            self.matcher = _matcher(num_disparities, block)
+        elif matcher in ('vpi-cuda', 'vpi-ofa'):       # GPU / optical-flow engine (vpi_stereo.py)
+            from overwall_nav.vpi_stereo import VpiMatcher
+            self.matcher = VpiMatcher(num_disparities, backend=matcher[4:])
+        else:
+            raise ValueError(f'unknown matcher {matcher!r} (sgbm, vpi-cuda, vpi-ofa)')
+        self.matcher_name = matcher
         self.min_range = self.f * self.baseline / num_disparities
         self.max_range = max_range_m
         vs = np.arange(self.rows[0], self.rows[1], step)
@@ -178,18 +186,29 @@ class StereoRig:
         f, _l, u = level(ray[None, :], pitch_deg)[0]
         return math.degrees(math.atan2(u, f))
 
-    def points(self, left, right):
+    def points(self, left, right, timings=None):
         """Two mono8 frames -> (N x 3 left-camera-frame points in metres, matched fraction).
 
         Two rejections that matter on real images (found on skybeta-03 looking at a glossy
         table): on low-texture or glare patches SGBM piles matches up at its largest disparity,
         a fake surface square-on to the camera at the minimum range. So pixels with too little
         horizontal texture (``texture_min``, mean |d/dx| over the block) and disparities within
-        ``saturation_px`` of the search limit are dropped."""
+        ``saturation_px`` of the search limit are dropped.
+
+        ``timings``: optional dict; gets wall-clock seconds for 'rectify', 'match', 'post'."""
+        t0 = time.perf_counter()
         lr, rr = self.rectify(left, right)
         r0, r1 = self.rows
         band = lr[r0:r1]
+        t1 = time.perf_counter()
         disparity = self.matcher.compute(band, rr[r0:r1]).astype(np.float32) / 16.0
+        t2 = time.perf_counter()
+        out = self._points_from(disparity, band)
+        if timings is not None:
+            timings.update(rectify=t1 - t0, match=t2 - t1, post=time.perf_counter() - t2)
+        return out
+
+    def _points_from(self, disparity, band):
         if self.texture_min > 0:
             gx = np.abs(cv2.Sobel(band, cv2.CV_32F, 1, 0, ksize=3))
             disparity[cv2.blur(gx, (self.block, self.block)) < self.texture_min] = 0.0
