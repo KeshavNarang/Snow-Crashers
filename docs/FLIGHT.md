@@ -1,9 +1,9 @@
 # Running on skybeta-03
 
 The simple up/forward/land mission has completed several real flight tests,
-confirmed by the user. The full goalnav/cheese route has different readiness:
+confirmed by the user. The full goalnav route has different readiness:
 see [current status](STATUS.md). No PX4 parameter changes are required by the
-existing simple mission or the simulated cheese experiment.
+existing simple mission or goalnav.
 
 ## Startup and deployment
 
@@ -60,9 +60,9 @@ pilot with RC control for every flight.
 ## Landing and logs
 
 The current mission commands descent and waits for PX4's landing detector and
-automatic disarm; the interface does not provide arm/re-arm services. The cheese
-experiment ends on the mat; the normal goalnav route defaults to a brief armed
-pad rest and return, so its settings must not be confused with the shortcut.
+automatic disarm; the interface does not provide arm/re-arm services. The goalnav
+route rests 0.5 s on the pad from its own touchdown and climbs before PX4's 2 s
+auto-disarm, then returns.
 
 Container/tmux screen history can be lost on restart. Goalnav's recorder writes
 MCAP, ROS logs and `run.json` under the mounted `~/team_ws/logs/<timestamp>/`,

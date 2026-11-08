@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One command per stage to fly goalnav on OUR drone (skybeta-03). Plain steps: FLYING.md.
-#   tools/fly deploy "<your name>" [cheese]   (cheese: cheese.launch.py) lock, copy goalnav + scripts, make sure the camera runs RGBSTEREO
+#   tools/fly deploy "<your name>"   lock, copy goalnav + scripts, make sure the camera runs RGBSTEREO
 #                                    (builds the team camera image if not), pick the goalnav mission (asks sudo)
 #                                    -> then power-cycle the drone (battery out 10 s, in, wait ~3 min)
 #   tools/fly check                  both health checks: the organizers' doctor, then our pre-flight
@@ -23,10 +23,9 @@ CAMERA_CONFIG=/root/skybeta_ws/install/oakd_vslam_bringup/share/oakd_vslam_bring
 camera_mode() { "$d" run "docker exec skybeta-stack grep -h -m1 '^[[:space:]]*i_pipeline_type:' $CAMERA_CONFIG 2>/dev/null | awk '{print \$2}'" || true; }
 case "${1:-}" in
   deploy)
-    who="${2:?usage: tools/fly deploy \"<your name>\" [cheese]}"
-    launch="${3:-goalnav}.launch.py"
-    [ -f "goalnav/launch/$launch" ] || { echo "no goalnav/launch/$launch"; exit 2; }
-    "$root/tools/drone-lock" acquire "$who" "goalnav flight test ($launch)"
+    who="${2:?usage: tools/fly deploy \"<your name>\"}"
+    launch=goalnav.launch.py
+    "$root/tools/drone-lock" acquire "$who" "goalnav flight test"
     "$d" run 'mv ~/team_ws/src/drone_ref ~/drone_ref.prev-$(date +%Y%m%d-%H%M%S) 2>/dev/null; true'
     "$d" push goalnav '~/team_ws/src/drone_ref'
     "$d" push team_ws/run_mission.sh '~/team_ws/run_mission.sh'

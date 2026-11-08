@@ -17,7 +17,7 @@ touching sensor code, mounts, drivers or fusion, read that first and log your wo
 
 ## Live pipeline
 
-The user confirms several successful simple `snowcrashers_nav` flights; wall crossing is also reported in the logs. Goalnav was deployed and bench-run props-off, but a successful goalnav course/cheese flight is not established. A newer branch records a team image with on-camera depth (~28 Hz), replacing earlier CPU-stereo assumptions. See [current status](docs/STATUS.md) and [camera contracts](docs/CAMERAS.md); verify the live configuration before deployment.
+The user confirms several successful simple `snowcrashers_nav` flights; wall crossing is also reported in the logs. Goalnav was deployed and bench-run props-off, but a successful goalnav course flight is not established (the cheese shortcut is dropped). A newer branch records a team image with on-camera depth (~28 Hz), replacing earlier CPU-stereo assumptions. See [current status](docs/STATUS.md) and [camera contracts](docs/CAMERAS.md); verify the live configuration before deployment.
 
 ## Required RGB for pad finding
 
