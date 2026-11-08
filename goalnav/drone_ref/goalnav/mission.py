@@ -259,9 +259,9 @@ class GoalMission:
     def wants_line(self):
         return self.route is not None and any(g.line_turn for g in self.route.upcoming(3))
 
-    def _line_turn(self, goal, past=0.07):
-        """Put a ``line_turn`` goal past where the floor line turns: far enough
-        that the centre crosses a checkpoint on the turn (CP1) by ~6 cm."""
+    def _line_turn(self, goal, past=0.):
+        """Put a ``line_turn`` goal where the floor line turns (CP1): judged by
+        eye, reaching it is enough, and that line is only 0.46 m from the net."""
         side = 1 if goal.line_turn == 'left' else -1
         found = turn_along(self.line_map, goal.prior, self.route.direction(goal), side)
         if found is None:
@@ -423,8 +423,11 @@ class GoalMission:
             d = float(np.linalg.norm(g.estimate - p))
             if g.passed is not None and d > 0.6:
                 continue                            # Well clear of it.
-            flat = 0.8 if g.kind in ('opening', 'tube') else 0.3
-            limit = min(limit, math.sqrt(cap ** 2 + 2 * deceleration * max(0., d - flat)))
+            flat = 0.8 if g.kind in ('opening', 'tube') else 0.5 if g.kind == 'reach' else 0.3
+            # A dead end (reach) brakes gently and early: its goal moves nearer
+            # when the floor line is seen, close in, and the net is just past it.
+            rate = deceleration / 2 if g.kind == 'reach' else deceleration
+            limit = min(limit, math.sqrt(cap ** 2 + 2 * rate * max(0., d - flat)))
             if g.kind == 'opening' and g.passed is None and d < 0.9 and self.telemetry is not None:
                 # Level first, then in: never reach the wall still descending.
                 error = abs(self.floor.height(self.telemetry.position[2]) - self._goal_height(g))
@@ -644,6 +647,10 @@ class GoalMission:
         if goal.kind == 'opening' and goal.axis is not None and goal.detected is not None \
                 and previous is not None and previous.passed is not None:
             return self._through_window(t, dt, goal)
+        dead_end = next((g for g in route.goals[:route.index] if g.kind == 'reach' and g.passed is not None
+                         and t.t - g.passed < 2.), None)
+        if dead_end is not None and np.linalg.norm(t.velocity[:2]) > 0.05:
+            return self._settle(t, dead_end.estimate)
         yaw_now = yaw_of(t.rotation)
         yaw_before = self.follower.yaw if self.follower.yaw is not None else yaw_now
         velocity, yaw = self.follower.step(dt, self.path, t.position[:2], self.speed, yaw_now)
@@ -694,6 +701,15 @@ class GoalMission:
         position = np.array([*target, self.floor.floor_z + height])
         return Setpoint(np.array([*feedforward, 0.]), self.follower.yaw, position=position,
                         acceleration=np.array([*accel, az])), []
+
+    def _settle(self, t, xy):
+        """Stop at a dead end (a ``reach`` goal, the net just past it) before
+        turning away: a stiff hold there, not the turn's path, which starts
+        where the drone is and lets it coast on toward the net."""
+        height = self.cfg.cruise_height
+        az = float(np.clip(-4.0 * (self.floor.height(t.position[2]) - height) - 3.0 * t.velocity[2], -2., 2.))
+        return Setpoint(np.zeros(3), self.follower.yaw, position=np.array([*xy, self.floor.floor_z + height]),
+                        acceleration=np.array([*self._stiff(xy, t), az])), []
 
     def _hold_if_stopped(self, t, velocity, gain=2.5, damping=0.6, limit=0.4):
         """A velocity setpoint alone lets turbulence and wall suction push the
