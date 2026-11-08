@@ -1,8 +1,10 @@
 # overwall_nav: approach a wall with stereo depth, fly over it, land
 
+Current [project status](../../../docs/STATUS.md), [flight guide](../../../docs/FLIGHT.md) and [camera/depth guide](../../../docs/CAMERAS.md).
+
 A test mission for one wall in a test net, to check the drone's sensors end to end:
 take off, creep forward until the wall is 0.5 m ahead, climb over it, land behind it.
-**Not flown yet.** Same skybeta contract as `snowcrashers_nav`: setpoints only through
+**Wall-crossing success is reported in the dated depth log.** This is separate from the user-confirmed successful simple up/forward/land flights. Same skybeta contract as `snowcrashers_nav`: setpoints only through
 `flight_interface`; the pilot arms in Altitude, then switches to Position.
 
 ## Nodes
@@ -10,6 +12,7 @@ take off, creep forward until the wall is 0.5 m ahead, climb over it, land behin
 | Executable | Does | Commands the drone? |
 |---|---|---|
 | `stereo_depth` | Depth from the OAK-D-S2's two mono cameras (the stack has no depth topic), as 3D points in a level frame binned into 5 cm cells, plus a floor-plane fit -> `/overwall/front` | no |
+| `pad_detect` | The landing mat in the colour image (`pad.py`) -> `/overwall/pad` | no |
 | `sensor_check` | Listens ~12 s to every sensor the mission uses and prints PASS/WARN/FAIL | no |
 | `overwall_mission` | The mission (`mission.py`, perception in `perception.py`) | via `/skybeta/setpoint/*` only |
 
@@ -47,7 +50,16 @@ docker exec skybeta-stack bash -c "source skybeta_env.sh; ros2 run overwall_nav 
   the depth loop cancels that at the wall, and landing 2 m past the stop point leaves room for
   it on the way down.
 
-## Tests (31, also run on the drone)
+## Landing on the pad (colour camera, `pad_detect`)
+
+With `/overwall/pad` running, it does not land at a fixed distance: past the wall it drops until the
+camera is 0.8 m above the floor (from the crossing height the colour camera never sees the whole
+mat: the wall hides it, then it is below the image), looks, sweeps +-35 deg once if needed, flies
+over the mat's centre and lands there. Not seen: lands `land_beyond_wall_m` past the wall as before.
+Without `pad_detect` output (stock camera: no colour) the mission is unchanged. Colour needs the team
+camera image with the `rgbd` pipeline; see `agents/logs/2026-11-07-overwall-pad.md`.
+
+## Tests (also run on the drone)
 
 ```bash
 cd team_ws/src/overwall_nav && python -m unittest discover -s test     # ~2.5 min
