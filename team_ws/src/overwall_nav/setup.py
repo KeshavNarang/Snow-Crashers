@@ -27,6 +27,7 @@ setup(
             'overwall_mission = overwall_nav.mission_node:main',
             'sensor_check = overwall_nav.sensor_check_node:main',
             'pad_detect = overwall_nav.pad_detect_node:main',
+            'remote_link = overwall_nav.remote_link_node:main',
         ],
     },
 )

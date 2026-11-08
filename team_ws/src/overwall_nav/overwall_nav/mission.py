@@ -34,6 +34,13 @@ switches to Position on the ground, and that is the go signal.
                 then a 0.4 m/s downward twist (PX4's land detector needs a commanded
                 descent >= 0.275 m/s) until PX4 detects the landing and disarms.
 
+REMOTE (PS5 controller via the laptop, /overwall/remote; the rules now allow remote input). The
+mission keeps flying and stays the only thing that sends setpoints: sticks (sent only while L1 is
+held) shift every pose target by an offset that moves at up to nudge_speed_mps, capped at
+nudge_max_xy_m / nudge_max_z_m; buttons: 'land' (land here), 'hold' (pause, hover in place),
+'resume', 'clear' (offset back to zero). Input older than remote_stale_s is ignored. No
+/overwall/remote: the mission flies as without it.
+
 Heights are PX4's own estimate (local_enu in /skybeta/state), the frame PX4 steers in. The
 flight interface clamps every pose to 0.3-3.0 m above the *vision* origin (origin_enu), so
 targets are compared after that same clamp (on skybeta-03 PX4's height read 0.3-0.45 m
@@ -97,6 +104,10 @@ class Params:
         self.pad_stale_s = 1.0           # /overwall/pad older than this: pad_detect is not running
         self.pad_agree_m = 0.25          # two sightings this close are the mat
         self.pad_past_wall_m = 0.3       # a mat nearer than this past the wall face is not ours
+        self.nudge_speed_mps = 0.25      # full stick (PS5 remote)
+        self.nudge_max_xy_m = 1.5
+        self.nudge_max_z_m = 0.5
+        self.remote_stale_s = 0.3        # remote input older than this is ignored (link lost)
         self.repeat = True
         for key, value in overrides.items():
             if not hasattr(self, key):
@@ -161,6 +172,10 @@ class Mission:
         self.last_step = None
         self.ground_floor = []           # floor-fit camera heights seen while landed
         self.result = {}
+        self.nudge = [0.0, 0.0, 0.0]     # remote offset added to pose targets, odom frame
+        self.paused = False
+        self.remote_done = 0             # highest remote event id handled
+        self.remote_was_fresh = None
         self._reset_phase_vars()
 
     def _reset_phase_vars(self):
@@ -288,14 +303,66 @@ class Mission:
         self.hold_yaw = math.atan2(self.forward[1], self.forward[0])
         self.enter('TO_PAD', now, text)
 
-    def descend(self, now, where, text):
-        self.land_xy = (float(where[0]), float(where[1]))
+    def remote_input(self, now, remote, here, dt):
+        """Apply the PS5 controller's sticks and buttons (flying phases only)."""
+        p = self.p
+        fresh = self._fresh(remote, now, p.remote_stale_s)
+        if remote is not None and fresh != self.remote_was_fresh:
+            self.say('Remote %s.' % ('connected' if fresh else 'input stale: ignored (link lost?)'))
+        self.remote_was_fresh = fresh if remote is not None else None
+        if not fresh:
+            return
+        for ev_id, name in sorted(remote.get('events') or []):
+            if ev_id <= self.remote_done:
+                continue
+            self.remote_done = ev_id
+            if name == 'land' and self.phase not in ('DESCEND', 'TOUCHDOWN'):
+                self.paused = False
+                spot = (here[0] - self.nudge[0], here[1] - self.nudge[1])
+                self.descend(now, spot, 'Remote: Land here (%.2f m forward).' % self._along(here), planned=True)
+            elif name == 'hold' and not self.paused:
+                self.paused = True
+                self.say('Remote: hold (hovering in place).')
+            elif name == 'resume' and self.paused:
+                self.paused = False
+                self.say('Remote: resume %s.' % self.phase)
+            elif name == 'clear':
+                self.nudge = [0.0, 0.0, 0.0]
+                self.say('Remote: nudge cleared.')
+        f, l, u = (max(-1.0, min(1.0, float(v))) for v in (list(remote.get('sticks') or [0, 0, 0]) + [0, 0, 0])[:3])
+        if f or l or u:
+            fx, fy = self.forward
+            step = p.nudge_speed_mps * dt
+            x = self.nudge[0] + step * (f * fx - l * fy)
+            y = self.nudge[1] + step * (f * fy + l * fx)
+            h = math.hypot(x, y)
+            if h > p.nudge_max_xy_m:
+                x, y = x * p.nudge_max_xy_m / h, y * p.nudge_max_xy_m / h
+            z = max(-p.nudge_max_z_m, min(p.nudge_max_z_m, self.nudge[2] + step * u))
+            self.nudge = [x, y, z]
+
+    def out(self, target):
+        """A pose target plus the remote offset (never above the height cap or below the floor;
+        no height offset while landing)."""
+        if target is None:
+            return None
+        dz = 0.0 if self.phase in ('DESCEND', 'TOUCHDOWN') else self.nudge[2]
+        z = target[2] + dz
+        if self.start is not None and self.cam_ground is not None:
+            z = min(self.start[2] + self.height_cap(), max(self.start[2] + self.p.floor_m, z))
+        return (target[0] + self.nudge[0], target[1] + self.nudge[1], z)
+
+    def descend(self, now, where, text, planned=False):
+        """Land at ``where``: a measured position (``here``, which already includes the remote
+        offset: it is taken back out, since out() adds it), or a planned target (planned=True)."""
+        dx, dy = (0.0, 0.0) if planned else (self.nudge[0], self.nudge[1])
+        self.land_xy = (float(where[0]) - dx, float(where[1]) - dy)
         self.descend_from = self.target[2] if self.target else where[2]
         self.floor_since = None
         self.enter('DESCEND', now, text)
 
     # -- the tick --------------------------------------------------------------
-    def step(self, now, state, odom, front, pad=None):
+    def step(self, now, state, odom, front, pad=None, remote=None):
         """pad: the /overwall/pad dict from pad_detect ('candidates') + 'received', or None."""
         p = self.p
         dt = 0.0 if self.last_step is None else max(0.0, min(0.5, now - self.last_step))
@@ -362,6 +429,7 @@ class Mission:
                            'camera_height_m': round(self.cam_ground, 3)}
             self.result['height_cap_m'] = round(self.height_cap(), 2)
             self.hold_yaw = yaw
+            self.nudge, self.paused, self.remote_done = [0.0, 0.0, 0.0], False, 0
             self.enter('CLIMB', now, 'Offboard active: start (%.2f, %.2f, %.2f), heading %.0f deg (held), camera %.2f m '
                        'above the floor (%s). Height limit %.2f m (net top %.2f m). Climbing to %.2f m.'
                        % (*here, math.degrees(yaw), self.cam_ground, source, self.height_cap(), p.net_top_m,
@@ -371,6 +439,11 @@ class Mission:
             if self.phase == 'TOUCHDOWN':
                 return ('twist', (0.0, 0.0, -p.descent_slow_mps))
             return ('pose', self.target) if self.target else None
+        if self.phase in self.FLYING:
+            self.remote_input(now, remote, here, dt)
+            if self.paused and self.phase not in ('DESCEND', 'TOUCHDOWN'):
+                self.since += dt                          # phase timers stand still while held
+                return ('pose', self.out(self.target)) if self.target else None
         t = now - self.since
         along = self._along(here)
         height = here[2] - self.start[2]
@@ -596,7 +669,7 @@ class Mission:
             self.target = self.goal
             miss = math.hypot(here[0] - self.goal[0], here[1] - self.goal[1])
             if self._held(miss < p.reach_xy_m, now):
-                self.descend(now, self.goal, 'Past the wall (%.2f m forward). Landing.' % along)
+                self.descend(now, self.goal, 'Past the wall (%.2f m forward). Landing.' % along, planned=True)
             elif t > p.arrive_timeout_s:
                 self.descend(now, here, 'Still %.2f m from the landing point: landing here.' % miss)
 
@@ -621,8 +694,8 @@ class Mission:
                 self.say('Still armed 20 s into the final descent: pilot, disarm once it is on the floor.')
             if landed:
                 return ('twist', (0.0, 0.0, -p.descent_slow_mps))
-            vx, vy = (p.xy_gain * (self.land_xy[k] - here[k]) for k in range(2))
+            vx, vy = (p.xy_gain * (self.land_xy[k] + self.nudge[k] - here[k]) for k in range(2))
             scale = min(1.0, p.xy_max_mps / max(1e-9, math.hypot(vx, vy)))
             return ('twist', (vx * scale, vy * scale, -p.descent_slow_mps))
 
-        return ('pose', self.target)
+        return ('pose', self.out(self.target))
