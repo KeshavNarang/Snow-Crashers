@@ -31,10 +31,20 @@ class RGBCamera:
     hfov_deg: float = 69.          # IMX378 on the OAK-D S2
     offset: tuple = (0.10, 0., 0.)
     pitch_deg: float = 26.7
+    principal: tuple = None        # (cx, cy) in pixels (centres at integers); None: the exact centre
+    exposure: float = 1.0          # brightness gain; the dark room is localsim.goalrun.DARK_EXPOSURE
 
     @property
     def fx(self):
         return (self.width / 2) / math.tan(math.radians(self.hfov_deg) / 2)
+
+    @property
+    def cx(self):
+        return self.principal[0] if self.principal else self.width / 2 - 0.5
+
+    @property
+    def cy(self):
+        return self.principal[1] if self.principal else self.height / 2 - 0.5
 
     def body_from_optical(self):
         t = math.radians(self.pitch_deg)
@@ -88,11 +98,7 @@ class FloorPainter:
 
 def render(world, camera, painter, position, rotation, rng):
     """(height, width, 3) uint8 image."""
-    u = np.arange(camera.width) + 0.5 - camera.width / 2
-    v = np.arange(camera.height) + 0.5 - camera.height / 2
-    uu, vv = np.meshgrid(u, v)
-    rays = np.stack([uu / camera.fx, vv / camera.fx, np.ones_like(uu)], axis=-1).reshape(-1, 3)
-    directions = rays @ (rotation @ camera.body_from_optical()).T
+    directions = pixel_rays(camera) @ (rotation @ camera.body_from_optical()).T
     directions /= np.linalg.norm(directions, axis=1)[:, None]
     origin = position + rotation @ np.asarray(camera.offset)
     hit = world.cast(origin, directions, 0.05, 12.)
@@ -131,9 +137,16 @@ def render(world, camera, painter, position, rotation, rng):
     rest = ~on_floor & ~solid
     if rest.any():
         rgb[rest] = _beyond(world, origin, directions[rest])
-    gain = rng.uniform(0.85, 1.15)
+    gain = rng.uniform(0.85, 1.15) * camera.exposure
     rgb = rgb * gain + rng.normal(0., 6., rgb.shape)
     return np.clip(rgb, 0, 255).astype(np.uint8).reshape(camera.height, camera.width, 3)
+
+
+def pixel_rays(camera):
+    """Optical-frame ray through each pixel centre, row-major (pixel i looks at (i - cx) / fx)."""
+    uu, vv = np.meshgrid((np.arange(camera.width) - camera.cx) / camera.fx,
+                         (np.arange(camera.height) - camera.cy) / camera.fx)
+    return np.stack([uu, vv, np.ones_like(uu)], axis=-1).reshape(-1, 3)
 
 
 def _tarp_colour(world, points):

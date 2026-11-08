@@ -28,13 +28,13 @@ class ScenarioTest(unittest.TestCase):
                 self.assertIn(flag, ('--camera-hz', '--camera-latency', '--vehicle'), name)
 
     def test_drone_scenario_is_the_measured_depth(self):
-        # agents/logs/2026-11-07-goalnav-hardware.md: stereo_node, 2 worker threads, 4.0 Hz, 234 ms old.
+        # agents/logs/2026-11-08-sim-stereo-drone.md: stereo_node 3.77 Hz, age mean 0.159 s (read-only capture).
         flags = batch.scenario_flags('drone')
-        self.assertEqual(flags[flags.index('--camera-hz') + 1], '4.0')
-        self.assertEqual(flags[flags.index('--camera-latency') + 1], '0.234')
+        self.assertEqual(flags[flags.index('--camera-hz') + 1], '3.77')
+        self.assertEqual(flags[flags.index('--camera-latency') + 1], '0.159')
 
     def test_drone_scenario_is_slower_than_the_sim_default(self):
-        # The gap this guards: goalrun's defaults (--camera-hz 4.5, --camera-latency 0.13) are kinder
+        # The gap this guards: goalrun's old defaults (--camera-hz 4.5, --camera-latency 0.13) are kinder
         # than the drone, so a batch run without a scenario overstates the pass rate.
         flags = batch.scenario_flags('drone')
         self.assertLess(float(flags[flags.index('--camera-hz') + 1]), 4.5)
