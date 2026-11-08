@@ -39,8 +39,14 @@ net_half: [3.048, 3.048]      # expected net, centred on the CAD origin
 # Long straight walls the course heading is measured from (CAD centrelines).
 # As rebuilt (2026-11-07, agents/logs/2026-11-07-walls-rebuilt.md) M1 is swung 30-60
 # degrees, M2 is gone and M3 moved: only the barrier still stands where it was scanned.
+# Without M1-M3 the barrier was the only reference left, and the drone does not see it
+# before the window (it is behind it at the launch): the heading stayed as placed by eye.
+# The two rebuilt walls it does see are added at their measured poses
+# (agents/logs/2026-11-07-walls-rebuilt.md: about +-3-5 deg each).
 heading_walls:
   - [[-0.90, 0.382], [0.55, 0.382]]   # the barrier's long panel, north face (scan: the first two are tilted)
+  - [[-2.80, 2.72], [-1.20, 2.62]]     # the long panel across the first corridor's north end (-3.5 deg)
+  - [[0.35, 0.71], [0.95, 1.55]]       # M3, rebuilt: short panel, 35.5 deg east of north
 # The return mark, from the launch: [right, ahead] of its heading (m). The
 # launch spot itself: it is the one spot known clear at floor level (below).
 return_offset: [0.0, 0.0]
