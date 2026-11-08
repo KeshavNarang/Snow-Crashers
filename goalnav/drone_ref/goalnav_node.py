@@ -326,7 +326,9 @@ class GoalNavNode(Node):
         return Telemetry(t=self._now(), position=ned_to_enu((m.x, m.y, m.z)),
                          velocity=ned_to_enu((m.vx, m.vy, m.vz)), rotation=px4_attitude_enu(self.attitude.q),
                          armed=armed, offboard=offboard, landed=True if landed is None else bool(landed),
-                         valid=bool(m.xy_valid and m.z_valid and m.v_xy_valid))
+                         valid=bool(m.xy_valid and m.z_valid and m.v_xy_valid),
+                         dead_reckoning=bool(getattr(m, 'dead_reckoning', False)),
+                         xy_resets=int(getattr(m, 'xy_reset_counter', 0)))
 
     # -- outputs -----------------------------------------------------------------------
     def _tick(self):

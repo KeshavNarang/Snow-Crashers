@@ -129,7 +129,7 @@ class Vehicle:
         self.frame_origin, self.frame_yaw = self.p.copy(), yaw
         self.drift = np.zeros(3)
         self.lapse, self.lapse_v = np.zeros(3), np.zeros(3)     # dead-reckoning error in a lapse
-        self.in_lapse, self.lapse_until, self.lapses = False, 0., []
+        self.in_lapse, self.lapse_until, self.lapses, self.xy_resets = False, 0., [], 0
         self.yaw_drift = 0.
         self.events = []
         bus.subscribe('/fmu/in/offboard_control_mode', self._mode)
@@ -288,6 +288,7 @@ class Vehicle:
         if self.in_lapse and now_s >= self.lapse_until:
             self.in_lapse = False
             self.lapse[:], self.lapse_v[:] = 0., 0.          # vision back: the estimator resets to it
+            self.xy_resets += 1
         if not self.in_lapse and cfg.vio_lapse_per_min > 0 and not self.landed \
                 and self.rng.random() < cfg.vio_lapse_per_min / 60. * dt:
             self.in_lapse = True
@@ -463,7 +464,7 @@ class Vehicle:
             heading=float(self.heading() + self.yaw_drift), eph=cfg.eph,
             epv=cfg.epv_landed if not range_valid else cfg.epv_flying,
             dist_bottom=float(reading if range_valid else height), dist_bottom_valid=bool(range_valid),
-            dist_bottom_var=0.0055, dist_bottom_sensor_bitfield=cfg.range_bitfield if range_valid else 0))
+            dead_reckoning=bool(self.in_lapse), xy_reset_counter=self.xy_resets, dist_bottom_var=0.0055, dist_bottom_sensor_bitfield=cfg.range_bitfield if range_valid else 0))
         self.bus.publish('/fmu/out/vehicle_attitude', m.VehicleAttitude(
             timestamp=us, timestamp_sample=us, q=self.attitude()))
         # cuVSLAM's odometry, as flight_interface uses it (its altitude origin
