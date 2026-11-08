@@ -1,0 +1,10 @@
+# Simulator-only shortcut. Uses course priors, never the generated pad location.
+launch_cad: [-2.52, 0.82]
+launch_heading_deg: 90
+net_half: [3.048, 3.048]
+takeoff_offset: [0.10, 0.0]
+return_offset: [0.0, 0.0]
+net_extra: {west: 0.12}
+goals:
+  - {id: over_barrier, kind: waypoint, at: [-2.25, -0.20], heading: -90, across: 0.10, along: 0.10}
+  - {id: pad, kind: pad, at: [-1.65, -2.10], heading: -90, across: 0.30, along: 0.30, checkpoint: CP5, lookouts: [[-1.65, -0.20], [-2.10, -0.30], [-0.75, -0.35]]}
