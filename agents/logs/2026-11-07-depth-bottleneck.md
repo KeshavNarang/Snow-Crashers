@@ -43,3 +43,19 @@ less range resolution, so NOT applied. `config/overwall.yaml` is unchanged.
 
 Real limits remain for a faster course run (needs a dense depth image at >= 10 Hz): on-camera depth
 (organizers) or a GPU stereo path. For the current slow over-the-wall mission, no depth fix is needed.
+
+## Rolled back: scale 0.4 was not worth it (2026-11-08)
+After the power-cycle, scale 0.4 was live (param confirmed) but did not raise the depth rate:
+- Same spot, side by side: 0.4 -> 4.0 Hz, 60 ms/frame; 0.5 -> 3.4 Hz, 71 ms/frame. Early low rates (3.5-3.9 Hz,
+  camera pairs 18/14 Hz) were stack warm-up (~5 min after boot); settled: cameras ~28 Hz, depth ~4.2 Hz.
+- Is compute the bottleneck? No. Whole machine was 45 % idle, cuVSLAM stayed 27-28 Hz while a second,
+  uncapped (rate_hz 30) stereo_depth ran. That uncapped instance still only reached 3.4 Hz at 85 ms/frame.
+  stereo_depth is limited by its own single Python thread (receiving + syncing ~28 pairs/s of 0.66 MB
+  images + matching), not by the machine and not by the matcher alone. A cheaper matcher barely helps.
+- Floor fit failed (0/68) at both scales on that spot: scene/position, not the setting.
+Config restored to the original (drone file restored from ~/overwall.yaml.bak-before-scale04).
+
+## Ideas that could actually raise the depth rate (not tried)
+- Match in a worker thread so receive and match overlap; or rewrite stereo_depth in C++.
+- On-camera StereoDepth (needs the organizers: config is in ~/skybeta).
+- GPU stereo (container has no CUDA OpenCV / Isaac stereo).

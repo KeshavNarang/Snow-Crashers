@@ -7,7 +7,6 @@ stereo_depth:
   ros__parameters:
     camera_pitch_deg: 27.0     # camera holder angle, degrees DOWN
     rate_hz: 5.0               # what the Jetson sustains with VIO running
-    scale: 0.4                 # image scale for the matcher (was 0.5): ~17% faster per frame, passes all tests
 
 overwall_mission:
   ros__parameters:
