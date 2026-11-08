@@ -199,6 +199,14 @@ class MessyWorld(World):
     def observe(self, origin, directions, hit, camera):
         """Ray lengths the OAK-D reports: tarps ripple, the net is nearly
         invisible, then the measured stereo error model (``localsim.oakd_model``)."""
+        out, kinds = self.surfaces(origin, directions, hit)
+        grid = (len(np.arange(camera.stride / 2, camera.height, camera.stride)),
+                len(np.arange(camera.stride / 2, camera.width, camera.stride)))
+        return oakd_model.apply(out, kinds, grid, camera, self.rng)
+
+    def surfaces(self, origin, directions, hit):
+        """True ray lengths with the tarps' ripple and the net's strands, and
+        what each ray hit (an index into ``oakd_model.KINDS``)."""
         self.frame += 1
         out = hit.copy()
         kinds = np.full(len(out), oakd_model.KINDS.index('beyond'))
@@ -225,9 +233,7 @@ class MessyWorld(World):
         if passed.any():
             out[passed] = np.minimum(out[passed], self._beyond(origin, directions[passed]))
             kinds[passed] = oakd_model.KINDS.index('beyond')
-        grid = (len(np.arange(camera.stride / 2, camera.height, camera.stride)),
-                len(np.arange(camera.stride / 2, camera.width, camera.stride)))
-        return oakd_model.apply(out, kinds, grid, camera, self.rng)
+        return out, kinds
 
     # -- the downward rangefinder -----------------------------------------------
     def range_down(self, position, rotation):

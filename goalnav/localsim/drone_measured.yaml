@@ -5,12 +5,12 @@
 # Already matched in goalrun itself (no flag needed): camera pitch 27.6 deg and offset
 # (agents/logs/2026-11-07-goalnav-calibration.md, from the TF), HFOV 77.5 deg, baseline 7.5 cm.
 #
-# Keys: camera_hz, camera_latency (s, capture to points), vehicle (VehicleConfig fields).
+# Keys: camera_hz, camera_latency (s, capture to points; both means, rgbstereo jitters them), vehicle (VehicleConfig fields).
 
 drone:
-  source: agents/logs/2026-11-07-goalnav-hardware.md, third session (goalnav stereo_node, 2 worker threads, 4.0 Hz, 234 ms old)
-  camera_hz: 4.0
-  camera_latency: 0.234
+  source: read-only capture on skybeta-03 2026-11-08 (agents/logs/2026-11-08-sim-stereo-drone.md), stereo_node 3.77 Hz, age mean 0.159 s (median 0.111, p90 0.28); goalrun jitters both around these means (localsim/jetson_stereo.py). Was 4.0 Hz / 0.234 s (2026-11-07-goalnav-hardware.md)
+  camera_hz: 3.77
+  camera_latency: 0.159
 
 drone_slow:
   source: same log, stereo_node single-threaded (2.8 Hz); 0.4 s age is overwall's measured depth age (2026-11-07-depth-bottleneck.md, goalnav-calibration.md)
@@ -26,6 +26,6 @@ drone_drift:
     yaw_drift_rad_per_sqrt_s: 0.003
 
 sim_default:
-  source: goalrun's own defaults (4.5 Hz, 0.13 s), older and kinder than the drone; for comparing with earlier runs only
+  source: goalrun's defaults before 2026-11-08 (4.5 Hz, 0.13 s), kinder than the drone; for comparing with earlier runs only
   camera_hz: 4.5
   camera_latency: 0.13
