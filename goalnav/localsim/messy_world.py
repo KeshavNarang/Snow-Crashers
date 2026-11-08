@@ -29,7 +29,7 @@ from localsim.world import World
 FLUTTER_M = 0.02                 # vinyl stretched over plywood: it ripples, it does not billow
 NET_RETURN = (0.003, 0.02)       # p = min(cap, k / r^2): thin black cord, almost never matched
 RANGE_MAX_M = 4.0
-RANGE_HALF_ANGLE = math.radians(13.5)
+RANGE_HALF_ANGLE = math.radians(0.5)    # skybeta airframes: one downward laser, ~1 deg beam (not a VL53L1X cone)
 MESH_RETURN = 0.35               # wire tunnel: share of mesh voxels seen per frame
 SOLID, MESH, TARP, PVC = 1, 2, 3, 4
 GLASS_RETURN = 0.04              # the hall's windows: a reflection now and then, else daylight (no depth)

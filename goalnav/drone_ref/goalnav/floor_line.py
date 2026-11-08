@@ -8,12 +8,21 @@ of it: where it turns east at the end of the first corridor, which is CP1.
 import numpy as np
 
 
-def dark_floor_points(image, fx, fy, cx, cy, camera_origin, camera_rotation, floor_z, max_range=3.0, stride=2):
-    """Floor-plane XY of the tape's pixels (dark and grey) in one frame."""
-    rgb = image[::stride, ::stride].astype(float)
-    brightness = rgb.sum(axis=2)
-    chroma = rgb.max(axis=2) - rgb.min(axis=2)
-    v, u = np.nonzero((brightness < 150) & (chroma < 35))
+def dark_floor_points(image, fx, fy, cx, cy, camera_origin, camera_rotation, floor_z, max_range=3.0, stride=2,
+                      mono_ratio=0.3):
+    """Floor-plane XY of the tape's pixels (dark and grey) in one frame. A mono
+    image (the drone's cameras are mono): pixels under ``mono_ratio`` of the
+    floor's brightness (the median of the image's lower half, mostly floor). The
+    black tape is ~0.2 of the orange floor's; its dark pebbles ~0.5, the mat ~0.9."""
+    if image.ndim == 2:
+        grey = image[::stride, ::stride].astype(float)
+        dark = grey < mono_ratio * np.median(grey[grey.shape[0] // 2:])
+    else:
+        rgb = image[::stride, ::stride].astype(float)
+        brightness = rgb.sum(axis=2)
+        chroma = rgb.max(axis=2) - rgb.min(axis=2)
+        dark = (brightness < 150) & (chroma < 35)
+    v, u = np.nonzero(dark)
     if not len(v):
         return np.zeros((0, 2))
     rays = np.column_stack([(u * stride + 0.5 * stride - cx) / fx, (v * stride + 0.5 * stride - cy) / fy,

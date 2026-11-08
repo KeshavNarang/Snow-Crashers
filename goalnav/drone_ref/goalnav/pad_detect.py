@@ -71,7 +71,11 @@ class PadDetector:
     def detect(self, image, fx, fy, cx, cy, camera_origin, camera_rotation, floor_z):
         """Pad centre (x, y) in the odometry frame, or None.
 
-        ``camera_rotation`` maps optical (x right, y down, z forward) to odom."""
+        ``camera_rotation`` maps optical (x right, y down, z forward) to odom.
+        Colour only: in brightness alone the blue mat is within ~10 % of the
+        orange floor, so a mono image (all the drone's cameras give) finds nothing."""
+        if np.ndim(image) != 3:
+            return None
         cfg = self.cfg
         mask = self.mask(image)
         best = None

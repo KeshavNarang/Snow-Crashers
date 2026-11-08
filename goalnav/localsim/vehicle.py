@@ -425,13 +425,15 @@ class Vehicle:
         estimate = self._to_local(self.p - self.frame_origin + self.drift) + self.rng.normal(0., noise, 3)
         velocity = self._to_local(self.v) + self.rng.normal(0., 0.003, 3)
         height = self.p[2] - self.ground + 0.0007
-        range_valid = height >= cfg.range_min_m
+        # The downward laser's reading (goalrun sets it), as PX4 passes it on in dist_bottom.
+        reading = getattr(self, 'range_reading', None)
+        range_valid = reading is not None and reading >= cfg.range_min_m
         self.bus.publish('/fmu/out/vehicle_local_position', m.VehicleLocalPosition(
             timestamp=us, timestamp_sample=us, x=float(estimate[0]), y=float(estimate[1]),
             z=float(estimate[2]), vx=float(velocity[0]), vy=float(velocity[1]), vz=float(velocity[2]),
             heading=float(self.heading() + self.yaw_drift), eph=cfg.eph,
             epv=cfg.epv_landed if not range_valid else cfg.epv_flying,
-            dist_bottom=float(height + self.ground), dist_bottom_valid=bool(range_valid),
+            dist_bottom=float(reading if range_valid else height), dist_bottom_valid=bool(range_valid),
             dist_bottom_var=0.0055, dist_bottom_sensor_bitfield=cfg.range_bitfield if range_valid else 0))
         self.bus.publish('/fmu/out/vehicle_attitude', m.VehicleAttitude(
             timestamp=us, timestamp_sample=us, q=self.attitude()))
