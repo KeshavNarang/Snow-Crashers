@@ -20,7 +20,7 @@ TF chain base_link -> oak_left_camera_optical_frame: offset (0.106, 0.038, 0.031
 0.9 deg off, ~6 cm at 4 m, in every wall, window and tape cell it maps. It also placed a colour pad
 camera at the left camera's mount (the colour camera is 3.8 cm to its right).
 
-Fix (9c4aec2): each image uses the TF from `base_frame` to its own `frame_id`; the parameters are the
+Fix (`fix(goalnav): place each camera from the TF`): each image uses the TF from `base_frame` to its own `frame_id`; the parameters are the
 fallback when there is no TF (the simulator). The fallback pitch is now 27.6: the simulator renders at
 27.6 but goalnav ran with the 27.0 default, a mismatch every earlier sim run carried.
 
