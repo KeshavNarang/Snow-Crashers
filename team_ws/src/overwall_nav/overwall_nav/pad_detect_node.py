@@ -12,8 +12,11 @@ Publishes   /overwall/pad  std_msgs/String JSON, every processed frame (also whe
             candidates   [{'centre': [f, l], 'sides': [short, long], 'touches', 'pixels'}, ...]
                          floor metres PER METRE of camera height, camera level frame (pad.py)
             pitch_deg, proc_ms, age_ms
+Saves      one 320 px colour snapshot every save_period_s (0: never) to $ROS_LOG_DIR/pad_frames/, for
+            tuning the detector on real frames offline (never read back by a run: rule 6.4).
 """
 import json
+import os
 import time
 
 import rclpy
@@ -36,12 +39,15 @@ class PadDetectNode(Node):
         super().__init__('pad_detect')
         for name, default in (('image', '/oak/rgb/image_raw'), ('info', '/oak/rgb/camera_info'),
                               ('output', '/overwall/pad'), ('rate_hz', 5.0), ('camera_pitch_deg', 27.0),
-                              ('log_period_s', 1.0)):
+                              ('log_period_s', 1.0), ('save_period_s', 1.0)):
             self.declare_parameter(name, default)
         g = lambda n: self.get_parameter(n).value  # noqa: E731
         self.period = 1.0 / float(g('rate_hz'))
         self.pitch = float(g('camera_pitch_deg'))
         self.log_period = float(g('log_period_s'))
+        self.save_period = float(g('save_period_s'))
+        self.save_dir = os.path.join(os.environ['ROS_LOG_DIR'], 'pad_frames') if os.environ.get('ROS_LOG_DIR') else None
+        self.last_save = 0.0
         self.finder = PadFinder()
         self.bridge = CvBridge()
         self.info = None
@@ -88,6 +94,17 @@ class PadDetectNode(Node):
         age_ms = (self.get_clock().now() - Time.from_msg(msg.header.stamp)).nanoseconds * 1e-6
         self.pub.publish(String(data=json.dumps({'candidates': candidates, 'pitch_deg': self.pitch,
                                                  'proc_ms': round(proc_ms, 1), 'age_ms': round(age_ms, 1)})))
+        if self.save_dir and self.save_period > 0 and start - self.last_save >= self.save_period:
+            self.last_save = start
+            try:
+                import cv2
+                os.makedirs(self.save_dir, exist_ok=True)
+                small = cv2.resize(image, (320, max(1, image.shape[0] * 320 // image.shape[1])))
+                name = '%.2f_%d.jpg' % (Time.from_msg(msg.header.stamp).nanoseconds * 1e-9, len(candidates))
+                cv2.imwrite(os.path.join(self.save_dir, name), cv2.cvtColor(small, cv2.COLOR_RGB2BGR),
+                            [cv2.IMWRITE_JPEG_QUALITY, 85])
+            except Exception as exc:  # noqa: BLE001
+                self.get_logger().warn(f'snapshot not saved: {exc}', throttle_duration_sec=30.0)
         self.frames += 1
         self.seen += bool(candidates)
         if start - self.last_log >= self.log_period:

@@ -34,8 +34,9 @@
 
 skybeta-03 ran `overwall_nav` with CPU `stereo_depth` (~3.1 Hz), not goalnav. Colour was
 on (`/oak/rgb/image_raw`, 640x400 bgr8, ~8.6 Hz, fx 489.6); no on-camera depth topic;
-`px4_link: false`. The team camera config is now `rgbd` (colour + on-camera depth) on
-`agent/cheese-validate`, not yet built into the drone image.
+`px4_link: false`. The team image is `RGBSTEREO` (colour, no on-camera depth): with `rgbd`
+or `depth` PX4 stopped fusing VIO (PR #18, overwall-pad log). goalnav and the cheese run map
+from on-camera depth, so they need another depth source before they can fly.
 
 ## Branches and deployment are different things
 
