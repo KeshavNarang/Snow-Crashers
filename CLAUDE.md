@@ -18,7 +18,13 @@ The pipeline that actually flies on skybeta-03 is `team_ws/src/overwall_nav` (an
 
 ## Evals first (the workflow)
 
-Write the eval before the code. For every fix or feature:
+**Always run the evals before any code is written. No exceptions** (a one-line config change included,
+if it can change behaviour). Writing code before the eval exists is the one thing this repo does not do.
+For every fix or feature:
+0. **Run the existing suite first** to get a baseline, so you know what was green before you touched
+   anything (`cd team_ws/src/overwall_nav && python -m unittest discover -s test`; mission tests need
+   `PYTHONPATH=../../../skybetav1/src/skybeta_flight_interface`). Profile before optimising: measure where
+   the time goes, then write the eval for that.
 1. **Write the eval first** and run it on the current code. It must fail for the right reason.
    For a bug, build a case that reproduces what was seen on the drone, and add a check that the
    old behaviour really is the bug, so the eval cannot pass by accident.
@@ -28,6 +34,8 @@ Write the eval before the code. For every fix or feature:
    happen (e.g. the fix hiding a real fault).
 4. **Run the whole suite** before committing, and again on the drone's own Python if the change
    touches the Jetson (tests under `team_ws/src/overwall_nav/test/`, `tools/drone_tools/`).
+   For a speed-up, keep a FROZEN copy of the old function in the test and assert same answers plus a
+   speed ratio in the same process (see `test/test_floorfit_speed.py`).
 5. **Measure on the drone** only after the evals pass, and record numbers in `agents/logs/`.
    A measurement taken in the first ~5 minutes after boot is warm-up, not steady state.
 Use a git worktree (`git worktree add ../<name> -b agent/<topic> origin/main`) rather than
@@ -75,3 +83,7 @@ the hostname does not resolve, say so; do not guess other hosts.
   session can pick up.
 - Simulate first: `goalnav/localsim` (see `goalnav/README.md`). Run `python3 -m pytest` where
   tests exist before pushing.
+
+## Drone lock etiquette
+`tools/drone-lock status` before anything beyond a read-only look. If another agent holds the lock, don't
+take it over and don't add load during its measurements (benchmarks are CPU-sensitive): wait, or ask the user.
