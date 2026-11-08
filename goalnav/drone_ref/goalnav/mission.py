@@ -20,7 +20,7 @@ import numpy as np
 from drone_ref.goalnav.altitude import FloorTracker
 from drone_ref.goalnav.control import Follower, heading_change
 from drone_ref.goalnav.geometry import yaw_of, wrap
-from drone_ref.goalnav.goals import Route, opening_axis, refine, wall_offset, wall_rotation
+from drone_ref.goalnav.goals import Route, opening_axis, refine, wall_line, wall_offset, wall_rotation
 from drone_ref.goalnav.floor_line import LineMap, turn_along
 from drone_ref.goalnav.livemap import OCCUPIED as OCCUPIED_LOGODDS, Fence, LiveMap
 from drone_ref.goalnav.planner import Planner, clearance
@@ -455,17 +455,11 @@ class GoalMission:
         along the wall for the opening looks where the wall really is."""
         floor = self.floor.floor_z
         cells = np.argwhere(self.map.blocked(floor + 0.50, floor + 0.95))
-        if len(cells) < 10:
+        fit = wall_line(self.map.centre_of(cells), goal.prior, self.route.direction(goal), reach, 10)
+        if fit is None:
             return
-        xy = self.map.centre_of(cells)
-        near = xy[np.linalg.norm(xy - goal.prior, axis=1) < reach]
-        if len(near) < 10:
-            return
-        centre = near.mean(axis=0)
-        _, values, vt = np.linalg.svd(near - centre)
-        if values[0] < 2.5 * max(values[1], 1e-6):
-            return
-        normal = np.array([-vt[0][1], vt[0][0]])
+        centre, along = fit
+        normal = np.array([-along[1], along[0]])
         if abs(normal @ self.route.direction(goal)) < math.cos(math.radians(35)):
             return
         goal.prior = goal.prior - normal * float((goal.prior - centre) @ normal)
@@ -521,6 +515,8 @@ class GoalMission:
         sill, lintel = max(sills), min(lintels)   # band boundaries: the tightest column
         if not 0.2 < sill < expected - 0.1:
             return
+        if sill <= expected - 0.6:
+            return                  # Nothing under it in the span looked at: open air, not over a sill.
         # The obstacle check spans feet + vertical_margin below the origin and
         # rotor tops + 0.05 above: centre that span in the opening.
         low = sill + self.cfg.landed_base_height + self.cfg.vertical_margin + 0.02
