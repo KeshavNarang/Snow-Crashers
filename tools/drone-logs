@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Copy overwall_nav run logs from skybeta-03 (~/team_ws/logs/overwall/<UTC date-time>/) to this laptop.
+#   tools/drone-logs            list the runs on the drone (newest last), with sizes
+#   tools/drone-logs latest     pull the newest run
+#   tools/drone-logs <run>      pull one run, e.g. 20261108-060036
+#   tools/drone-logs all        pull every run not already here
+# Saved under flight_logs/<run>/ in the repo (gitignored). Uses tools/drone (login from .secrets).
+# Each run: node logs (*.log), bag/ (MCAP: depth, pad, state, setpoints, odometry), pad_frames/*.jpg.
+set -euo pipefail
+root="$(cd "$(dirname "$0")/.." && pwd)"
+remote=/home/dronehacks/team_ws/logs/overwall
+dest="$root/flight_logs"
+drone() { "$root/tools/drone" run "$@" 2> >(grep -v '^Warning: Permanently' >&2); }
+"$root/tools/drone" run true >/dev/null 2>&1 \
+  || { echo "can't reach skybeta-03.local (same Wi-Fi? powered up? ~3 min after power-on)" >&2; exit 2; }
+
+runs() { drone "ls -1 $remote 2>/dev/null | grep -E '^[0-9]{8}-[0-9]{6}\$' || true"; }
+
+pull() {   # run
+  local run=$1
+  [[ $run =~ ^[0-9]{8}-[0-9]{6}$ ]] || { echo "not a run name: $run" >&2; return 1; }
+  mkdir -p "$dest"
+  drone "tar -C $remote -czf - $run" | tar -xzf - -C "$dest"
+  echo "pulled $run -> flight_logs/$run ($(du -sh "$dest/$run" | cut -f1))"
+  ls "$dest/$run" | sed 's/^/  /'
+}
+
+case "${1:-list}" in
+  list)
+    drone "cd $remote 2>/dev/null && for r in \$(ls -1 | grep -E '^[0-9]{8}-[0-9]{6}\$'); do
+             printf '%s  %6s  %4s snapshots\n' \$r \$(du -sh \$r | cut -f1) \$(ls \$r/pad_frames 2>/dev/null | wc -l); done" \
+      ; [[ -n $(runs) ]] || echo "no runs yet ($remote)" ;;
+  latest)
+    run=$(runs | tail -1)
+    [[ -n $run ]] || { echo "no runs on the drone yet" >&2; exit 1; }
+    pull "$run" ;;
+  all)
+    for run in $(runs); do [[ -d $dest/$run ]] || pull "$run"; done ;;
+  -h|--help) sed -n 2,9p "$0" ;;
+  *) pull "$1" ;;
+esac
