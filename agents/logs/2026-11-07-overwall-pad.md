@@ -43,3 +43,24 @@ is never in view from the crossing height. From 0.8 m camera height, 0.55 m past
    image's own TF. Check the colour optical frame's TF on the drone.
 4. The VIO-tilt shift (README: ~0.45 m along the heading per metre of height) would move the
    touchdown when descending 0.66 m onto the pad, if it is still present after CAMERA_PITCH was set.
+
+## On the drone, 2026-11-07 evening (claude, with the team at the net)
+- Deployed main's overwall_nav to ~/team_ws/src. **Gotcha:** a backup in ~/team_ws/parked/ broke the
+  power-up build ("Duplicate package names"): colcon scans all of team_ws. ~/team_ws/parked has a COLCON_IGNORE now.
+- Colour via James's team image (oakd_vslam.yaml with `depth`, switched to `rgbd`): colour came up
+  (8.9 Hz, K fx 489.6 as the tests assumed), but **PX4 never fused VIO** (estimator cs_ev_pos false,
+  xy_valid false, dead reckoning), with `rgbd` AND with James's plain `depth`. cuVSLAM logged frame
+  deltas of 66 ms; one vision message reached PX4 290 ms old.
+- Stock organizers' image (Dockerfile parked): PX4 fused VIO (cs_ev_pos, cs_ev_yaw), xy_valid true.
+- Ours: stock oakd_vslam.yaml + `i_pipeline_type: RGBSTEREO` + an rgb block 640x400@10 (team_ws/camera/,
+  team_ws/Dockerfile). PX4 fused VIO with colour on, cuVSLAM 28 Hz, no frame-delta warnings.
+  Stock notes: the OAK-D USB link saturates ~143 MB/s; the pair is 118 MB/s; on-camera depth is what tipped it.
+- Arming refused once: battery_status 7.98 V on a 4-cell setting (warning 3, 0 %): wrong pack on the main lead.
+  With the flight pack: 15.86 V, 81 %.
+- Flight 1 (ours, colour on, ~2 min after boot): climbed, saw the wall 1.15 m ahead, crept the 0.25 m
+  backstop and landed in front (drone was ~1.2 m from the wall, settings assume 27 in).
+- Flight 2: reported hitting the wall in front. **No log**: powered off, the container's screen log is gone.
+  Same approach/climb code as Luke's (mission changes only start after the climb; depth changes since
+  were output-identical speed-ups and the floor-fit prior). Differences from Luke's flight: colour + pad_detect
+  on the CPU, flown ~2 min after boot, start spot unknown. Depth measured 0.2-2.5 Hz in that warm-up
+  vs 4.3 Hz on the stock image. Fix applied: runs are now logged to ~/team_ws/logs/overwall/<date>/.
