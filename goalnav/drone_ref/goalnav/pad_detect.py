@@ -12,7 +12,9 @@ brightness, so exposure changes and shadow do not matter). Each frame:
    weighting each by the floor area it covers;
 4. keep a blob that lies on the floor with a mat-sized footprint (people in
    blue beyond the net do not project to a flat ~0.8 m square on the floor)
-   and report its centre in the odometry frame.
+   that is SOLID and SQUARE: a ladder as blue as the mat (2026-11-07, landed
+   on) is mat-sized but its rails and rungs fill ~25 % of their convex hull,
+   the mat ~80 %; and report its centre in the odometry frame.
 
 Pure NumPy; no OpenCV needed.
 """
@@ -43,6 +45,8 @@ class PadConfig:
     max_side: float = 1.25
     min_pixels: int = 25
     threshold: float = 0.35       # of the model's peak
+    min_solidity: float = 0.55    # blob pixels / their convex hull (mat ~0.8, ladder ~0.25)
+    min_squareness: float = 0.6   # short / long side on the floor (mat ~1 at any rotation)
 
 
 class PadDetector:
@@ -104,6 +108,12 @@ class PadDetector:
             blob['why'] = 'cut off by the frame'
             if touches and spread.min() < 0.8 * cfg.mat_size:
                 continue                                       # Cut off by the frame: centre unreliable.
+            blob['why'] = 'not solid (ladder?)'
+            if solidity(pixels) < cfg.min_solidity:
+                continue
+            blob['why'] = 'not square'
+            if not touches and spread.min() < cfg.min_squareness * spread.max():
+                continue
             blob['why'] = 'smaller'
             if best is None or len(pixels) > best[0]:
                 best = (len(pixels), centre, blob, pixels)
@@ -112,6 +122,27 @@ class PadDetector:
         best[2]['why'] = 'pad'
         self.last['pick'] = best[3]
         return best[1]
+
+
+def solidity(pixels):
+    """Pixel count / area of the convex hull of the pixels' squares (1 = convex and filled).
+    Same as overwall_nav/pad.py."""
+    i, j = pixels[:, 0].astype(float), pixels[:, 1].astype(float)
+    corners = np.unique(np.concatenate([np.column_stack([i + a, j + b]) for a in (0, 1) for b in (0, 1)]), axis=0)
+    pts = corners[np.lexsort((corners[:, 1], corners[:, 0]))]
+
+    def half(seq):
+        out = []
+        for p in seq:
+            while len(out) >= 2 and ((out[-1][0] - out[-2][0]) * (p[1] - out[-2][1])
+                                     - (out[-1][1] - out[-2][1]) * (p[0] - out[-2][0])) <= 0:
+                out.pop()
+            out.append(p)
+        return out
+    hull = np.array(half(pts)[:-1] + half(pts[::-1])[:-1])
+    x, y = hull[:, 0], hull[:, 1]
+    area = 0.5 * abs(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1)))
+    return float(len(pixels) / area) if area > 0 else 1.0
 
 
 def _blur(h):
