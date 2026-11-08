@@ -11,9 +11,10 @@ import pytest
 from localsim import goalrun, messy_course as mc, messy_ladder as ml
 
 
-def test_both_poses_kept_and_moved_is_the_default():
+def test_both_poses_kept_and_original_is_the_default():
+    # The team switched back to the original spot on 2026-11-08 (the move may have been temporary).
     assert set(ml.POSES) >= {'original', 'moved'}
-    assert ml.DEFAULT_POSE == 'moved'
+    assert ml.DEFAULT_POSE == 'original'
     original = ml.POSES['original']
     assert original.centre == (-2.31, -0.62) and original.yaw_deg == 16.     # as first measured, unchanged
 
