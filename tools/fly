@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # One command per stage to fly goalnav on OUR drone (skybeta-03). Plain steps: FLYING.md.
-#   tools/fly deploy "<your name>"   lock, copy goalnav + scripts, pick the goalnav mission (asks sudo)
+#   tools/fly deploy "<your name>"   lock, copy goalnav + scripts, make sure the camera runs RGBSTEREO
+#                                    (builds the team camera image if not), pick the goalnav mission (asks sudo)
 #                                    -> then power-cycle the drone (battery out 10 s, in, wait ~3 min)
-#   tools/fly check                  pre-flight (props off, on the launch mark) + goalnav status
+#   tools/fly check                  both health checks: the organizers' doctor, then our pre-flight
+#                                    (props off, on the launch mark), then goalnav's status
 #   tools/fly logs                   copy the newest flight log folder to ./flight-logs/
 #   tools/fly done                   put Luke's overwall_nav back (asks sudo) and release the lock
 set -euo pipefail
@@ -15,6 +17,9 @@ fi
 host=$("$d" run hostname)
 [ "$host" = "skybeta-03" ] || { echo "STOP: connected to '$host', not skybeta-03. Disconnect."; exit 2; }
 in_stack() { "$d" run "docker exec skybeta-stack bash -c \"source skybeta_env.sh >/dev/null 2>&1; $1\""; }
+# The camera config the running stack uses (the team image replaces it with team_ws/camera/oakd_vslam.yaml).
+CAMERA_CONFIG=/root/skybeta_ws/install/oakd_vslam_bringup/share/oakd_vslam_bringup/config/oakd_vslam.yaml
+camera_mode() { "$d" run "docker exec skybeta-stack grep -h -m1 '^[[:space:]]*i_pipeline_type:' $CAMERA_CONFIG 2>/dev/null | awk '{print \$2}'" || true; }
 case "${1:-}" in
   deploy)
     who="${2:?usage: tools/fly deploy \"<your name>\"}"
@@ -24,15 +29,32 @@ case "${1:-}" in
     "$d" push team_ws/run_mission.sh '~/team_ws/run_mission.sh'
     "$d" push team_ws/preflight.sh '~/team_ws/preflight.sh'
     "$d" run 'chmod +x ~/team_ws/run_mission.sh ~/team_ws/preflight.sh'
+    mode=$(camera_mode)
+    if [ "$mode" = "RGBSTEREO" ]; then
+      echo "== camera: RGBSTEREO (colour + mono pair) already"
+    else
+      echo "== camera runs '${mode:-unknown}', not RGBSTEREO: building the team camera image (several minutes)"
+      "$d" run 'mkdir -p ~/team_ws/camera'
+      "$d" push team_ws/camera/oakd_vslam.yaml '~/team_ws/camera/oakd_vslam.yaml'
+      "$d" push team_ws/Dockerfile '~/team_ws/Dockerfile'
+      "$d" push team_ws/.dockerignore '~/team_ws/.dockerignore'
+      "$d" runt 'cd ~/skybeta && host/run.sh build'
+      echo "== camera image built: RGBSTEREO applies at the power-cycle below"
+    fi
     echo "== build check (about a minute)"
     in_stack "team_build.sh --packages-select drone_ref"
     echo "== choosing the goalnav mission (sudo password = the login password)"
     "$d" runt '~/team_ws/run_mission.sh drone_ref goalnav.launch.py'
     echo; echo "NOW: power-cycle the drone (battery out 10 s, in), wait ~3 min, then: tools/fly check" ;;
   check)
+    echo "== 1/3 the organizers' health check (host/doctor.sh)"
+    "$d" run 'cd ~/skybeta && host/doctor.sh' || echo "doctor reported a FAIL: read it above before flying"
+    echo; echo "== 2/3 our pre-flight (~25 s, keep the drone still)"
     "$d" run '~/team_ws/preflight.sh' || true
-    echo "== goalnav status (10 s)"
-    in_stack "timeout 10 ros2 topic echo --once /goalnav/status" || echo "NO goalnav status: do not fly (redo deploy + power-cycle)" ;;
+    echo; echo "== 3/3 goalnav status (10 s)"
+    in_stack "timeout 10 ros2 topic echo --once /goalnav/status" || echo "NO goalnav status: do not fly (redo deploy + power-cycle)"
+    echo; echo "Expected with goalnav: pre-flight 'mission' (names drone_ref), 'pad_detect' and 'wall depth rate'"
+    echo "(overwall_nav's nodes) FAIL. Everything else, and the doctor, should PASS. Camera must be RGBSTEREO." ;;
   logs)
     last=$("$d" run 'ls -t ~/team_ws/logs | head -1')
     mkdir -p flight-logs && "$d" pull "~/team_ws/logs/$last" "flight-logs/" && echo "saved flight-logs/$last" ;;
