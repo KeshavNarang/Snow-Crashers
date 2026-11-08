@@ -46,3 +46,15 @@ a file we were told to leave alone.
 - No driver thread above 25 % CPU, so the driver is not CPU-bound. USB: SuperSpeed 5000 Mbps, power/control=on.
 - The 24-26 Hz seen by plain Python subscribers is a consumer-side effect and irrelevant to the pipeline: cuVSLAM is the
   consumer that matters (29.4 Hz) and stereo_depth only uses 5 Hz.
+
+## Do the frame-loss bursts line up with CPU load? No (slam_gaps.py --cpu-log, 5 min at 1 s resolution)
+- Over 14.4 min of cuVSLAM log: 359 gap warnings, 472 of 25873 frames missing = 1.82 %, effective 29.5 Hz. Steady, not
+  worsening (per minute: 19 35 8 5 35 26 0 42 42 19 29 21 10 60 8). Gap sizes: 2 periods 288, 3: 48, 4: 16, 5: 4, 6: 2, 15: 1;
+  worst 500 ms.
+- 83 seconds with a gap vs 198 without: CPU 51 % vs 55 %, run queue 5.1 vs 6.1, the same busiest process (stereo_depth) in both.
+  Verdict: no relationship with CPU load at 1 s resolution. (Run queue is ~5-6 on 6 cores throughout, so the machine is
+  busy but not more so during gaps; sub-second spikes would not show at this resolution.)
+- So the remaining ~1.8 % loss is not explained by CPU utilisation, DDS transport (see above) or a saturated driver thread.
+  Left: USB/XLink transfer hiccups, device-side timing, or scheduling latency (not utilisation). The stack's own launch
+  file notes the driver stamps 30 fps at 32.2-33.6 ms; neither can be changed from team_ws.
+- Not tested yet: auto-exposure behaviour (e.g. bright hall into the dark tunnel), which is a feed-quality question, not a rate one.
