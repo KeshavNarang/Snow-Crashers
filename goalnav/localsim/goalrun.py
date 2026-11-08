@@ -29,7 +29,7 @@ sys.path.insert(0, str(ROOT.parent / 'skybetav1/src/skybeta_flight_interface'))
 
 from drone_ref.goalnav.geometry import depth_points    # noqa: E402
 from localsim import fakeros as m                      # noqa: E402
-from localsim import messy_course                      # noqa: E402
+from localsim import messy_course, messy_ladder        # noqa: E402
 from localsim.aero import WallField                    # noqa: E402
 from localsim.camrec import CameraRecorder             # noqa: E402
 from localsim.messy_rgb import FloorPainter, RGBCamera, render as render_rgb   # noqa: E402
@@ -153,7 +153,7 @@ class Recorder:
                 'zero': self.to_course(np.array([[0., 0.]]))[0].tolist()}
 
 
-def main(argv=None):
+def build_parser():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--severity', type=float, default=1.0)
@@ -167,16 +167,24 @@ def main(argv=None):
     parser.add_argument('--out', default=None)
     parser.add_argument('--no-viewer', action='store_true')
     parser.add_argument('--no-camera', action='store_true', help='do not keep the RGB and depth frames')
+    parser.add_argument('--no-ladder', action='store_true', help='the course without the 2026-11-07 stepladder')
+    parser.add_argument('--ladder-pose', choices=sorted(messy_ladder.POSES), default=messy_ladder.DEFAULT_POSE,
+                        help='where the stepladder stands (localsim/messy_ladder.py POSES)')
     parser.add_argument('--profile', default='safe', help='risk profile in config/goalnav_profiles.yaml')
     parser.add_argument('--tune', action='append', default=[], metavar='KEY=VALUE',
                         help='override one profile setting, e.g. --tune max_speed=0.7 --tune cp4_route=window')
     parser.add_argument('--layout', choices=messy_course.LAYOUTS, default=messy_course.LAYOUT,
                         help='walls as scanned (2026-11-06) or as rebuilt (2026-11-07); default %(default)s')
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
     out = Path(args.out or ROOT / f'localsim/out/goalnav/seed{args.seed}')
     out.mkdir(parents=True, exist_ok=True)
     wall = time.time()
-    course = messy_course.generate(args.seed, args.severity, layout=args.layout)
+    course = messy_course.generate(args.seed, args.severity, layout=args.layout, ladder=not args.no_ladder,
+                                    ladder_pose=args.ladder_pose)
     obj, meta_path = messy_course.save(course, out / 'course')
     meta = json.loads(meta_path.read_text())
     world = MessyWorld(obj, meta, seed=args.seed, cache_dir=ROOT / 'localsim/.cache')
