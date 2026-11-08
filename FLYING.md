@@ -1,12 +1,5 @@
 # Flying our software on skybeta-03
-
-Plain steps to put our navigation software ("goalnav") on the drone and fly it. Everything is on
-`main` now (our route planner plus the `agent/goalnav-fly` drone launch setup), so there's nothing
-to combine first. Run the commands from the repo folder in **Git Bash** on your laptop.
-
-The route: around the first wall, through the tunnel, through the window, land on the helipad.
-In the simulator it lands on the pad in 18 of 20 runs. **It has never flown on the real drone, so
-go step by step.**
+Run the commands from the repo folder in **Git Bash** on your laptop.
 
 ## Safety rules (always)
 
@@ -14,12 +7,15 @@ go step by step.**
 - **Props off** for bench tests. A person holds the **RC kill switch** for every flight.
 - Never run two missions or controllers at once.
 - Don't change PX4 parameters, failsafes, the geofence, the password, `host/doctor.sh` or tailscale.
-- Never commit, paste or print the password (`.secrets/skybeta-03.env`).
+- Never commit, paste or print the drone password.
 
 ## Before you start (once)
 
 - Your laptop is on the **same Wi-Fi/LAN** as the drone.
-- `.secrets/skybeta-03.env` exists in your repo folder. If it doesn't, ask the team.
+- Know the drone's login password (user `dronehacks`). The organizers gave it to the team; ask
+  them if nobody has it. Each `tools/fly` command asks for it once, hidden, and keeps it in memory
+  only. (If a `.secrets/skybeta-03.env` file exists in the repo folder, it's used instead and you
+  won't be asked.)
 - `git checkout main && git pull` so you fly the latest code.
 
 ## The four commands
