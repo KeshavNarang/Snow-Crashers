@@ -25,7 +25,8 @@ import numpy as np
 
 @dataclass
 class WindowConfig:
-    approach: float = 0.9        # both jambs well inside the view (the OAK-D's left strip and edges)
+    approach: float = 0.75       # both jambs inside the view (0.54 m half-width there vs 0.40-0.48), and
+                                 # 0.15 m further from the south net than 0.9 (rebuilt course, 2026-11-07)
     exit: float = 0.55
     settle_s: float = 1.0
     speed: float = 0.15

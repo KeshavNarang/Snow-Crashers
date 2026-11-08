@@ -584,7 +584,8 @@ def validate(course, radius=BODY_RADIUS + 0.05):
     i = at(launch)
     # Whoever places the drone keeps it visibly clear of the walls (8 cm); the
     # stands' pavers and battens on the floor need only clear its footprint.
-    for z0, z1, clear in ((0.10, 1.0, BODY_RADIUS + 0.08), (0.03, 0.10, BODY_RADIUS + 0.01)):
+    # Floor level: 5 cm (1 cm let the contact judge register a stand's paver at t=0, seeds 5 and 9).
+    for z0, z1, clear in ((0.10, 1.0, BODY_RADIUS + 0.08), (0.03, 0.10, BODY_RADIUS + 0.05)):
         layer, _, _ = _band_raster(solid, z0, z1)
         r = int(math.ceil(clear / res))
         if layer[i[0] - r:i[0] + r + 1, i[1] - r:i[1] + r + 1][

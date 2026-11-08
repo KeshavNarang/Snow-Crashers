@@ -104,6 +104,20 @@ class Recorder:
             out['gh'] = round(float(mission._goal_height(route.current)), 3)
         out['limit'] = round(mission.speed, 2)
         out['free'] = round(mission.free_ahead, 2)
+        if route is not None:
+            # The current goal, and where the mission thinks the window (and the point
+            # in front of it) is: estimate, detection, crossing axis (course frame).
+            out['goal'] = route.current.id if route.current is not None else None
+            for g in route.goals:
+                if g.kind == 'opening' or g.anchor is not None:
+                    est = self.to_course(np.array([g.estimate]))[0]
+                    rec = {'est': np.round(est, 3).tolist(),
+                           'det': None if g.detected is None
+                           else np.round(self.to_course(np.array([g.detected]))[0], 3).tolist()}
+                    if getattr(g, 'axis', None) is not None:
+                        tip = self.to_course(np.array([g.estimate + np.asarray(g.axis)]))[0]
+                        rec['axis'] = np.round(tip - est, 3).tolist()
+                    out.setdefault('wgoals', {})[g.id] = rec
         if mission.floor is not None and mission.floor.last:
             out['range'] = [mission.floor.last[0], None if mission.floor.last[1] is None
                             else round(float(mission.floor.last[1]), 3)]
