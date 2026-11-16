@@ -1,61 +1,40 @@
-# Snow Crashers
+# Team Snow Crashers
+***Entry for Stanford's 2026 [Drone Hacks](https://dronehacks.groups.stanford.edu/) competition***
 
-Our entry for Stanford DroneHacks 2026. The Sky Beta quadcopter (skybeta-03) must fly the
-course by itself: around walls, through a window, onto a landing mat, then back home. It does
-this with an OAK-D camera, PX4 and the organizers' `flight_interface`.
+Our team successfully flew the first autonomous flight of the hackathon, and developed and validated a reasonably accurate simulator.
 
-![3D simulator: the course as built, the drone's live map, its camera views and the goal chain](docs/images/sim3d.png)
+## The naive approach
 
-## From a plan on the CAD to navigating the course as built
+The naive approach would be to fully trust the course CAD the organizers provided. With this assumption, one should simply solve for the optimal path and fly it as fast as possible, as shown below.
 
-**First approach: race the CAD.** We planned a minimum-time path through the organizers' CAD
-course and checked it in a portable simulator. That simulator ran our real mission nodes over
-a fake ROS layer, with PX4's offboard control laws and an independent referee. On the CAD it
-finished in 12.4 s and came back home.
+![](docs/images/sim2d-naive.png)
 
-![2D replay of the planned race on the CAD course](docs/images/sim2d-naive.png)
+## Modeling the real course
 
-**Then the real course.** A phone scan of the hall showed that the course did not match the
-CAD: walls had moved and turned, and there were tarps, a ladder and rocks. A replayed plan would
-hit them, so we replaced it with a goal navigator. It builds a map from its own depth as it
-flies, finds each goal in the chain within that map, plans around what it sees, and finds
-the mat by colour. The simulator builds the course from the scan and jitters every wall within
-its measured uncertainty. The 3D viewer shows the truth beside what the drone believed.
+Of course, theory and reality are rarely the same. The real course dimensions were far from the ideal. There were even some additional obstacles, such as this ladder, which had to be modeled:
 
-| The phone scan over the simulated course | The course map and the goal chain |
-|---|---|
-| ![Scan overlay](docs/images/sim3d-scan.png) | ![Course map](docs/images/course-map.png) |
+![](docs/logs/2026-11-07-ladder/ladder_overlay.jpg)
 
-The simulator was fitted to real photos. When the walls were rebuilt and the ladder moved, we
-solved their positions from team photos and checked them by drawing the model back over those
-photos:
+Thankfully, with the help of a Gaussian splat of the course, agents are quite capable of adjusting geometry accordingly. Even with more accurate geometry, though, the panels and other elements on the course can get moved around between runs. So, we modified our simulator to account for slightly random positions within sane constraints.
 
-![The simulated ladder and walls drawn over the photos they were measured from](docs/logs/2026-11-07-ladder/ladder_overlay.jpg)
+![](docs/images/sim3d-scan.png)
 
-In the last batch (2026-11-08, 25 seeds) the drone landed on the pad without touching anything
-in 24 runs. These are simulated runs; they don't guarantee the real drone does the same.
+## The simulator
 
-## On the real drone
+Our simulator accounts for a number of effects, such as the ground effect, and simulates the flight stack, which allowed us reasonable confidence in our algorithms. Unfortunately, with only the resources to run one simulation at a time, it was too computationally intensive to gain meaningful results from.
 
-- Simple take-off, move and land flights worked. Wall crossing with CPU stereo depth worked
-  too ([status](docs/STATUS.md)). Video: [flight on 2026-11-07](photos/flight_2026-11-07.mp4),
-  [the ladder](photos/Ladder_Vid.mp4).
-- `tools/fly` runs each stage (deploy, check, fetch logs, hand back) with one command, and only on our own
-  drone. `tools/postflight.py` summarises a flight log in a minute.
-- `tools/ps5` adds a manual mode. A DualSense controller nudges the mission or flies it after
-  the automatic take-off, while the RC kill switch still rules.
-- `tools/manual-flight` flies by hand with every sensor recorded.
-- Depth and colour rates, VIO fusion and CPU load were measured on the drone. The simulator is
-  tuned to those numbers ([camera notes](docs/CAMERAS.md), [logs](docs/logs/)).
+## Navigation
 
-## Where things are
+Our intended algorithm was to set dynamic waypoints based on perceived geometry. This way, even if course elements were out of line, the drone would still be able to navigate to the end.
 
-| Path | What |
-|---|---|
-| [`docs/`](docs/README.md) | All guides, notes, logs and organizer material. Start at the index |
-| [`goalnav/`](goalnav/README.md) | The goal navigator and the 3D course simulator |
-| [`team_ws/`](team_ws/DRONE_SETUP.md) | ROS 2 packages that run on the drone (`snowcrashers_nav`, `overwall_nav`, `manual_flight`) |
-| [`tools/`](tools/) | Fly, deploy, fetch logs, drone lock, PS5 remote, bench tools |
-| [`skybetav1/`](skybetav1/README.md) | The organizers' stack (0.3.2), for reference |
-| [`cad/`](cad/) | The camera mount, original and modified |
-| [`photos/`](photos/) | The team's photos and videos of the course and flights |
+![](docs/images/course-map.png)
+
+## Finding the landing pad
+
+In order to recognize the landing pad, our team also modified the provided camera mount to face downwards. This allows us to use basic histogram back projection to find the final landing pad by its color, then confirm it by its simple shape and the known fact that it will be on the floor.
+
+![Original vs printed camera mount: the camera side plates tilted 27°](docs/images/camera-mount.png)
+
+---
+
+*For the sake of speed (quite valuable in a hackathon), code was largely AI generated with human guidance.*
