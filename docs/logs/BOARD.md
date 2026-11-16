@@ -32,4 +32,20 @@
 | Drone tooling: preflight.sh, run logs, drone-logs, stock+colour camera | claude / agent/preflight | merged | team_ws/{preflight.sh,Dockerfile,camera/}, tools/drone-logs, overwall launch logging | goalnav needs on-camera depth, which broke PX4 VIO fusion here: team decision on goalnav's depth source |
 | goalnav full course on RGBSTEREO with Jetson depth | claude (James) / PR #24 #29 #30 #31 merged | sim done, drone bench next | goalnav/, tools/bench-goalnav.sh, docs/logs/2026-11-08-handoff.md | Bench off the pad (tools/fly bench), then fly: see the handoff |
 | Manual flight, fully recorded (recorder only, NO flight_interface) | claude / agent/manual-flight | done, tested off-drone (WSL ROS 2 + fake drone), not yet run on skybeta-03 | team_ws/src/manual_flight/, tools/manual-flight, tools/test_manual_flight.py, MANUAL_FLIGHT.md | First use: confirm `/fmu/out/manual_control_setpoint` lands in the bag; the PX4 .ulg (QGC Log Download) is the sure copy of sticks and motors |
-| Sim RGBSTEREO depth/colour as measured on skybeta-03 (FOV, noise, texture gaps, jitter, colour clock) | claude / agent/sim-depth-match | active (sim only) | goalnav/localsim/{jetson_stereo,goalrun,messy_rgb,messy_world}.py, docs/logs/2026-11-08-sim-stereo-drone.md | Measure course floor/plywood/tarp texture fill on the drone |
+| Sim RGBSTEREO depth/colour as measured on skybeta-03 (FOV, noise, texture gaps, jitter, colour clock) | claude / agent/sim-depth-match (PR #36) | merged (sim only) | goalnav/localsim/{jetson_stereo,goalrun,messy_rgb,messy_world}.py, docs/logs/2026-11-08-sim-stereo-drone.md | Measure course floor/plywood/tarp texture fill on the drone |
+| Camera latency: converter queue depth 1, then GRAY8 from the driver | claude / agent/camera-data | queue fix merged (team image); GRAY8 unfinished, `archive/camera-data` | team_ws/Dockerfile, team_ws/camera/, tools/camera_data/, docs/logs/2026-11-08-camera-data.md | Settle the frame-drop cost before raising the depth rate; GRAY8 needs a driver build with the stack stopped |
+
+## Archived branches (unfinished, not merged, 2026-11-15)
+
+Kept as `archive/*` branches for the record, as they were left. None was checked against the
+final `main`.
+
+| Branch | What | State |
+|---|---|---|
+| `archive/prep` | The prep repo (race stack, 2D replay, goalnav history) before it moved here | snapshot |
+| `archive/camera-data` | GRAY8 straight from the OAK-D driver (`depthai_gray8.patch`, `fetch_driver.sh`) | unfinished |
+| `archive/cheese-run` | Over-the-wall cheese landing experiment | dropped by team decision (2026-11-08) |
+| `archive/nw-flush-tarp` | Layout test for the NW tarp flush with the net | unfinished |
+| `archive/south-turn` | Course layout and goals for the south turn | unfinished |
+| `archive/tunnel-robust` | No blind backing in the tunnel (test plus mission change) | unfinished |
+| `archive/tunnel-recentre` | Recentre on the tube's line after a lapse (test, plus the uncommitted mission work) | unfinished |
