@@ -146,8 +146,7 @@ the hostname does not resolve, say so; do not guess other hosts.
 - One workstream per branch: `agent/<topic>` (e.g. `agent/sensor-driver`). Small commits,
   rebase on `main`, don't force-push others' branches. Check `git status` before editing; others
   may have uncommitted work in the tree.
-- Hardware is a shared, single resource: use `tools/drone-lock`; see
-  `agents/PROTOCOL.md` for the lock, logging and handoff rules.
+- Hardware is a shared, single resource: use `tools/drone-lock` (see [Drone lock](#drone-lock-etiquette)).
 - Keep findings in files (`docs/sensor/`, `docs/logs/`), not only in chat, so the next
   session can pick up.
 - Simulate first: `goalnav/localsim` (see `goalnav/README.md`). Run `python3 -m pytest` where
@@ -158,5 +157,19 @@ the hostname does not resolve, say so; do not guess other hosts.
   not separate pages per batch.
 
 ## Drone lock etiquette
-`tools/drone-lock status` before anything beyond a read-only look. If another agent holds the lock, don't
+The drone is shared. Before anything beyond a read-only look, check the lock. If another agent holds it, don't
 take it over and don't add load during its measurements (benchmarks are CPU-sensitive): wait, or ask the user.
+
+1. `git pull`, then check `tools/drone-lock status` and `docs/logs/BOARD.md`.
+2. Take the lock: `tools/drone-lock acquire "<agent/topic>" "<what you will do>"`.
+3. Release when done: `tools/drone-lock release`. A lock older than 2 h is stale; ask the user.
+
+The lock is also written on the drone (`/tmp/agent.lock`) so agents on other machines see it.
+
+## Logs and handoff
+
+- Append each drone session to `docs/logs/YYYY-MM-DD-<topic>.md`: what you ran, what you saw,
+  what failed. Keep failed evidence.
+- Update your row in `docs/logs/BOARD.md` (owner, branch, state: todo/active/blocked/done, next step).
+- Save useful artifacts (ros topic dumps, params, bag summaries) under `docs/logs/`, small files only.
+- Never commit `.secrets/`. Never write the password into any tracked file.
