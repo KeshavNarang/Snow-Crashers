@@ -1,6 +1,6 @@
 # overwall_nav: approach a wall with stereo depth, fly over it, land
 
-Current [project status](../../../docs/STATUS.md), [flight guide](../../../docs/FLIGHT.md) and [camera/depth guide](../../../docs/CAMERAS.md).
+Current [project status](../../../docs/STATUS.md), [flight guide](../../../docs/FLYING.md) and [camera/depth guide](../../../docs/CAMERAS.md).
 
 A test mission for one wall in a test net, to check the drone's sensors end to end:
 take off, creep forward until the wall is 0.5 m ahead, climb over it, land behind it.

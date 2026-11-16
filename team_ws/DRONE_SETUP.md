@@ -1,6 +1,6 @@
 # human notes:
 
-> Current cross-project guidance: [docs/FLIGHT.md](../docs/FLIGHT.md) and [docs/STATUS.md](../docs/STATUS.md). The user confirms several successful simple up-and-move flights. Historical boot state, parameter issues and restrictions below are not a live inspection.
+> Current cross-project guidance: [docs/FLYING.md](../docs/FLYING.md#how-the-start-works) and [docs/STATUS.md](../docs/STATUS.md). The user confirms several successful simple up-and-move flights. Historical boot state, parameter issues and restrictions below are not a live inspection.
 code stored in: cd ~/team_ws/src
 Run to set the flags:  ~/team_ws/run_mission.sh snowcrashers_nav low_test.launch.py
 

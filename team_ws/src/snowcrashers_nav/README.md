@@ -1,7 +1,7 @@
 # snowcrashers_nav: up 2 m, forward 2 m, land (real skybeta drone)
 
 **Flight status (user report, 2026-11-07): several real simple up-and-move tests succeeded.**
-Current [flight guide](../../../docs/FLIGHT.md) and [project status](../../../docs/STATUS.md).
+Current [flight guide](../../../docs/FLYING.md) and [project status](../../../docs/STATUS.md).
 
 A team package for the skybeta drones (Jetson Orin Nano + Pixhawk 6C, PX4 1.16), written
 against what is actually on **skybeta-03** (skybeta 0.3.3, read 2026-11-07), not against
@@ -57,7 +57,7 @@ needed or wanted: the organisers ask everyone to keep the fleet defaults.
 1. Code: `~/team_ws/src/snowcrashers_nav` (this folder). The stack builds it.
 2. `sudo nano /etc/skybeta/drone.env` and set only these two lines:
    `COMPETITOR_PKG=snowcrashers_nav` and `COMPETITOR_LAUNCH=competitor.launch.py`.
-3. The stack must be running. Later sessions record autostart enabled; inspect the current service instead of assuming the initial “not installed” state still holds. `run_mission.sh` selects a mission but does not enable the service. Installing/enabling it with `host/autostart.sh enable` is a separate action that starts/restarts the stack; see the [flight guide](../../../docs/FLIGHT.md).
+3. The stack must be running. Later sessions record autostart enabled; inspect the current service instead of assuming the initial “not installed” state still holds. `run_mission.sh` selects a mission but does not enable the service. Installing/enabling it with `host/autostart.sh enable` is a separate action that starts/restarts the stack; see the [flight guide](../../../docs/FLYING.md).
 4. `host/doctor.sh` must show `uart-traffic PASS`. FAIL = no bytes from the flight controller:
    it is unpowered, the cable is not seated, or (on stock v1.16.2 firmware) the link wedged
    after an earlier stack stop and only an FC power cycle clears it.

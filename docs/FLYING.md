@@ -1,6 +1,10 @@
 # Flying our software on skybeta-03
 Run the commands from the repo folder in **Git Bash** on your laptop.
 
+This guide flies goalnav, the full-course mission. To fly by hand with everything recorded, see
+[MANUAL_FLIGHT.md](MANUAL_FLIGHT.md). How the start-up and the pilot's handover work underneath
+is in [How the start works](#how-the-start-works) at the end.
+
 ## Safety rules (always)
 
 - Only ever connect to **skybeta-03** (`tools/fly` stops if it's anything else).
@@ -94,22 +98,9 @@ launch how the drone's start-up passes `tuning` through.
 After each flight run `tools/fly logs`, and write what happened (and the log folder name) in
 `docs/logs/` so the next person can pick it up.
 
-## Test in the simulator first (optional, on your laptop)
+## Test in the simulator first
 
-From the `goalnav` folder (`cd goalnav`):
-
-```bash
-python -m localsim.goalrun --seed 1 --severity 0.7     # opens a 3D viewer of the run when done
-```
-
-It flies the same software against a simulated copy of the course, with the camera modelled as on
-the drone (RGBSTEREO). **The stepladder** sits where the team last saw it, which is currently its
-**original spot** between the barrier and the mat. If it moves again, change one word in
-`goalnav/localsim/messy_ladder.py`: `DEFAULT_POSE = 'original'` or `'moved'` (the south-west net
-corner). For one run only, add `--ladder-pose moved`. This only affects the simulator, not the drone.
-
-Latest check (2026-11-08, ladder in its original spot, 25 runs): **24 of 25** land on the helipad
-with no contact before landing. Simulator results don't guarantee the real drone will do the same.
+Optional, on your laptop: see [SIMULATION.md](SIMULATION.md).
 
 ## If something goes wrong
 
@@ -125,3 +116,76 @@ with no contact before landing. Simulator results don't guarantee the real drone
 More detail: `docs/logs/2026-11-07-goalnav-fly.md` (how goalnav was first deployed by hand),
 `docs/logs/2026-11-07-planner-rebuilt.md` (the route and its sim results),
 `skybetav1/docs/competitor_guide.md` (the organizers' rules).
+
+## How the start works
+
+The simple up/forward/land mission has completed several real flight tests,
+confirmed by the user. The full goalnav route has different readiness:
+see [current status](STATUS.md). No PX4 parameter changes are required by the
+existing simple mission or goalnav.
+
+### Startup and deployment
+
+Code lives in `~/team_ws/src`. The stack's competitor window builds that workspace
+and launches the selected package. `team_ws/run_mission.sh PACKAGE FILE.launch.py`
+changes `COMPETITOR_PKG` and `COMPETITOR_LAUNCH` in `/etc/skybeta/drone.env`.
+**It does not build, start, restart or enable autostart.** It prints a warning
+and the enable command if the service is not enabled.
+
+Autostart was recorded enabled in later hardware sessions. Check its current
+status rather than reinstalling it because an old guide says it is absent.
+`host/autostart.sh enable` installs/enables the service and starts/restarts it;
+that is a separate action from selecting a mission.
+
+Changing the launch selection takes effect at the next stack start. The usual
+on-site activation path is a physical power cycle. Replacing only team nodes
+inside an existing stack can avoid restarting the agent, but requires knowing
+which processes are active and ensuring there is only one controller/interface.
+A power cycle is not intrinsically required for every source edit.
+
+**Stock PX4 v1.16.2 can lose its FC-to-Jetson link after the agent/stack stops.**
+Later sessions sometimes restarted successfully, but also reproduced the failure.
+Do not promise that a software restart will recover it. Check the link and use
+an FC power cycle when needed; do not stop the stack without authorization.
+
+### How flight starts
+
+The mission and exactly one `flight_interface` must already be running and
+publishing fresh setpoints before the pilot switches modes.
+
+1. Confirm PX4 link, valid local position, landed state, selected mission and
+   perception. For the pad mission, real RGB images/calibration and real mat
+   detection are mandatory; mono/depth alone or fabricated RGB values do not qualify. For a new mission/configuration, perform a props-off rehearsal.
+2. Pilot arms in **Altitude** mode on the ground.
+3. Pilot switches to **Position** promptly while still on the ground.
+4. With `auto_offboard_on_arm: true`, the interface requests Offboard if its
+   checks pass. Goalnav starts when it sees armed + Offboard.
+
+Arming alone does not start autonomy. Arming while already in Position does
+not trigger it. The supplied flight interface has no arm service: the pilot
+arms; this is an interface design, not a claim that a Jetson cannot technically
+send an arm command. The simulator substitutes fake pilot actions.
+
+The documented “within 3 seconds” is an operational recommendation. The
+interface does not impose a three-second arm-to-switch deadline; PX4's preflight
+auto-disarm timeout and the remaining takeoff time still matter. A mode request
+has its own two-second retry window. Inspect actual installed parameters rather
+than treating historical defaults as measurements from today's boot.
+
+Pilot stick/mode takeover ends autonomy for that arming. Emergency kill stops
+the motors; it is distinct from controlled takeover and landing. Keep a human
+pilot with RC control for every flight.
+
+### Landing and logs
+
+The current mission commands descent and waits for PX4's landing detector and
+automatic disarm; the interface does not provide arm/re-arm services. The goalnav
+route rests 0.5 s on the pad from its own touchdown and climbs before PX4's 2 s
+auto-disarm, then returns.
+
+Container/tmux screen history can be lost on restart. Goalnav's recorder writes
+MCAP, ROS logs and `run.json` under the mounted `~/team_ws/logs/<timestamp>/`,
+which survives container recreation. Check recording and available disk space;
+full stereo-image recording can consume gigabytes in minutes.
+
+The detailed historical checklist is [DRONE_SETUP.md](../team_ws/DRONE_SETUP.md).
