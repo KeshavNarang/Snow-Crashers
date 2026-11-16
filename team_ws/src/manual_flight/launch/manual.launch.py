@@ -6,7 +6,7 @@ launch selected nothing can take the drone from the pilot. The organizers' stack
 the VIO bridge into PX4) still runs as always, so Position mode holds as usual.
 
 Select it:  ~/team_ws/run_mission.sh manual_flight manual.launch.py, then power-cycle
-(tools/manual-flight setup does both). Steps for people: MANUAL_FLIGHT.md.
+(tools/manual-flight setup does both). Steps for people: docs/MANUAL_FLIGHT.md.
 
 Each power-up records into ``log_dir/<date-time>/`` (default ``~/team_ws/logs``, the folder
 ``tools/fly logs`` pulls): ``bag/`` (MCAP), ``ros/`` (node logs), ``run.json``. PX4's own flight log

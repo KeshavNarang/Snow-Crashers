@@ -36,7 +36,7 @@ Needs `numpy`, `scipy` (scan tool only) and `pyyaml` (`localsim/requirements.txt
 
 ## Fly
 
-On skybeta-03 (see `team_ws/DRONE_SETUP.md`, the root `CLAUDE.md` and
+On skybeta-03 (see `team_ws/DRONE_SETUP.md`, `docs/AGENTS.md` and
 `tools/drone`; take `tools/drone-lock` first). The package needs `overwall_nav`
 (its stereo matcher) in the same workspace:
 

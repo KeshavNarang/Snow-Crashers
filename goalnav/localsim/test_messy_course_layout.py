@@ -15,7 +15,7 @@ import pytest
 from localsim import goalrun
 from localsim import messy_course as mc
 
-CASES = [(0, 0.0), (1, 1.0)]     # the measured pose, and the full jitter (CLAUDE.md budgets)
+CASES = [(0, 0.0), (1, 1.0)]     # the measured pose, and the full jitter (docs/AGENTS.md budgets)
 
 
 def _by_name(walls):

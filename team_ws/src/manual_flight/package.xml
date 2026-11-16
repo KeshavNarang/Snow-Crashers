@@ -4,7 +4,7 @@
   <version>0.1.0</version>
   <description>
     Hand-flown flight, fully recorded: a launch file with a rosbag recorder and NO flight_interface
-    or mission, so nothing can take the drone from the pilot. Steps: MANUAL_FLIGHT.md.
+    or mission, so nothing can take the drone from the pilot. Steps: docs/MANUAL_FLIGHT.md.
   </description>
   <maintainer email="odyssey@stanford.edu">snowcrashers</maintainer>
   <license>Apache-2.0</license>

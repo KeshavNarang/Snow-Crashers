@@ -3,9 +3,9 @@
 **Current project guidance:** start at [docs/README.md](README.md).
 [docs/STATUS.md](STATUS.md) supersedes stale deployment, camera and competition-rule claims below.
 
-Stanford DroneHacks 2026 entry. Read `README.md` (human notes, scoring), `THOUGHTS.md`,
+Stanford DroneHacks 2026 entry. Read `docs/HUMANS.md` (human notes, scoring), `docs/THOUGHTS.md`,
 `goalnav/README.md` and `goalnav/docs/GOALNAV.md` first. Official rules:
-`docs/organizer/`. Don't edit `README.md` (human-owned). Use git, not jj.
+`docs/organizer/`. Don't edit `docs/HUMANS.md` or `docs/THOUGHTS.md` (human-owned). Use git, not jj.
 
 ## Auxiliary sensor workstream (historical competition constraints)
 

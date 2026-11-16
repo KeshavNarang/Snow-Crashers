@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One command per stage to fly goalnav on OUR drone (skybeta-03). Plain steps: FLYING.md.
+# One command per stage to fly goalnav on OUR drone (skybeta-03). Plain steps: docs/FLYING.md.
 #   tools/fly deploy "<your name>"   lock, copy goalnav + scripts, make sure the camera runs RGBSTEREO
 #                                    (builds the team camera image if not), pick the goalnav mission (asks sudo)
 #                                    -> then power-cycle the drone (battery out 10 s, in, wait ~3 min)

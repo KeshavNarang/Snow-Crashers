@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fly OUR drone (skybeta-03) by hand with everything recorded. Plain steps: MANUAL_FLIGHT.md.
+# Fly OUR drone (skybeta-03) by hand with everything recorded. Plain steps: docs/MANUAL_FLIGHT.md.
 #   tools/manual-flight setup "<your name>" [--no-video]
 #                                  lock, copy the recorder, select it (asks sudo)
 #                                  -> then power-cycle the drone (battery out 10 s, in, wait ~3 min)
@@ -53,7 +53,7 @@ case "${1:-}" in
       else echo "FAIL something that can fly the drone is running:"; echo "$auto"; ok=0; fi
     fi
     if [ "$(recording)" = yes ]; then echo "OK   recorder running"
-    else echo "FAIL recorder not running (power-cycle; still off: see MANUAL_FLIGHT.md)"; ok=0; fi
+    else echo "FAIL recorder not running (power-cycle; still off: see docs/MANUAL_FLIGHT.md)"; ok=0; fi
     run=$(newest)
     size() { "$d" run "du -sk ~/team_ws/logs/${run:-none}/bag 2>/dev/null | cut -f1" | tr -d '\r' || true; }
     a=$(size); sleep 3; b=$(size)
