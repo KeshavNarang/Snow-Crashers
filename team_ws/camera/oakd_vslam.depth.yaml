@@ -1,5 +1,5 @@
 # NOT ACTIVE. James's config (on-camera depth + colour, for goalnav). On skybeta-03 2026-11-07 PX4
-# stopped fusing VIO with it (agents/logs/2026-11-07-overwall-pad.md). To use it, copy it over
+# stopped fusing VIO with it (docs/logs/2026-11-07-overwall-pad.md). To use it, copy it over
 # oakd_vslam.yaml, host/run.sh build, power-cycle, and check PX4 position (preflight.sh) before flying.
 
 # Team camera config for skybeta-03: the organizers' oakd_vslam.yaml (pair + IMU for

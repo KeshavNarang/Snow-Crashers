@@ -2,7 +2,7 @@
 
 > Design/history reference. For current flight evidence, enabled cameras, adapter branches and competition guidance, read [the central docs](../../docs/README.md). Sensor descriptions and old rule references below are not a live inventory.
 
-The race stack ([RACE.md](RACE.md)) replays a plan computed from the CAD. The
+The race stack ([RACE.md](https://github.com/lukemitchellandrews/DHSnowCrashersPrep/blob/main/reference_stack/docs/RACE.md), in the prep repo) replays a plan computed from the CAD. The
 course as built is not the CAD: walls are feet off, freestanding and can move
 between runs, the net is nearly invisible and everything is tarped. This
 stack does not trust the CAD for positions at all. It uses it for the order of

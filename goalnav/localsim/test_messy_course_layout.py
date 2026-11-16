@@ -3,7 +3,7 @@
 'scan' is the course as scanned on 2026-11-06; 'rebuilt' is the course as
 rebuilt on 2026-11-07, measured from photos/Changed_Walls.jpeg and
 photos/New_Walls_*. Measurements and their uncertainty:
-agents/logs/2026-11-07-walls-rebuilt.md.
+docs/logs/2026-11-07-walls-rebuilt.md.
 
 Run from goalnav/: python -m pytest localsim/test_messy_course_layout.py
 """

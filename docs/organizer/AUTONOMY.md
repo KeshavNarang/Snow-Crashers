@@ -1,8 +1,10 @@
 # Making your code fly when the pilot switches to Position
 
+> The organizers' guide for skybeta 0.3.3 and later (the copy of their stack in `skybetav1/` is 0.3.2).
+
 This is the step-by-step path from an empty workspace to: **the pilot arms, switches to
 Position, and your code flies the drone.** The rules behind it are in the
-[competitor guide](competitor_guide.md) §4 (the procedure) and §5 (running code); this page is the
+[competitor guide](../../skybetav1/docs/competitor_guide.md) §4 (the procedure) and §5 (running code); this page is the
 checklist.
 
 Needs skybeta **0.3.3 or later** on the drone (`cat ~/skybeta/VERSION`). On 0.3.2 and earlier, PX4

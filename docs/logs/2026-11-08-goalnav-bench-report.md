@@ -26,7 +26,7 @@ Sessions: claude with James. Simulator work in `goalnav/localsim`; drone work ov
 | `rgbd` (on-camera depth), 23:40–23:49 | 4.7–9.3 Hz | 25 Hz on camera | **11–19 Hz** (wants 30) | 19–25 Hz | **665 ms** | **false**, dead reckoning |
 | `RGBSTEREO`, stock stack + overwall_nav, 00:26 | 9.1 Hz | 3.15 Hz CPU (overwall `stereo_depth`), 88–400 ms | 29 Hz | 31–32 Hz | **62–105 ms** | **true** |
 
-- The team found the same with plain `depth` earlier (290 ms, not fused; `agents/logs/2026-11-07-overwall-pad.md`).
+- The team found the same with plain `depth` earlier (290 ms, not fused; `docs/logs/2026-11-07-overwall-pad.md`).
   On-camera depth overloads the OAK-D's USB link, and the mono pair drops frames.
 - Decision: `RGBSTEREO`, with goalnav's own `stereo_node` making depth on the Jetson (main, PR #21/#24).
 - The colour camera's tilt is fixed by the mount at 27.0° (TF, `oak_rgb_camera_optical_frame`). The

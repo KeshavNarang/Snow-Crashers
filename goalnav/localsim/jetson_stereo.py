@@ -2,7 +2,7 @@
 
 stereo_node runs overwall_nav.stereo.StereoRig on the mono pair: scale 0.4 (410x256), 96
 disparities, every 2nd pixel, rows 0-90 %, columns 96-410 (no match is possible left of the
-disparity range). Measured from a read-only capture (agents/logs/2026-11-08-sim-stereo-drone.md):
+disparity range). Measured from a read-only capture (docs/logs/2026-11-08-sim-stereo-drone.md):
 
 - intrinsics at scale 0.4 fx 263.9, cx 210.2, cy 129.4; baseline 0.0753 m, so fB = 19.87 px m;
 - depth only in -22.8..+37.5 deg across, -26.3..+20.6 deg down;

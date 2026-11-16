@@ -57,7 +57,7 @@ camera is 0.8 m above the floor (from the crossing height the colour camera neve
 mat: the wall hides it, then it is below the image), looks, sweeps +-35 deg once if needed, flies
 over the mat's centre and lands there. Not seen: lands `land_beyond_wall_m` past the wall as before.
 Without `pad_detect` output (stock camera: no colour) the mission is unchanged. Colour needs the team
-camera image with the `rgbd` pipeline; see `agents/logs/2026-11-07-overwall-pad.md`.
+camera image with the `rgbd` pipeline; see `docs/logs/2026-11-07-overwall-pad.md`.
 
 ## Tests (also run on the drone)
 

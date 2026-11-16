@@ -8,11 +8,11 @@
   VIO hover, Offboard takeoff or the pilot handover as universally unflown.
   This report does not establish which launch/parameters were used on every test.
 - **Wall crossing has been reported successful.** The
-  [depth log](../agents/logs/2026-11-07-depth-bottleneck.md) identifies the live
+  [depth log](logs/2026-11-07-depth-bottleneck.md) identifies the live
   overwall version as “Successful run going over wall.” This is separate from
   the simple flight tests the user confirms.
 - **Goalnav was deployed and bench-run, props off.** The
-  [third hardware session](../agents/logs/2026-11-07-goalnav-hardware.md#third-session-colour-camera-on-camera-depth-goalnav-deployed-1844-1910-props-off-lock-taken)
+  [third hardware session](logs/2026-11-07-goalnav-hardware.md#third-session-colour-camera-on-camera-depth-goalnav-deployed-1844-1910-props-off-lock-taken)
   records a successful build and logging/stereo operation, then restoration to
   overwall_nav. It does not record a successful goalnav course flight.
 - **Full goalnav course in the simulator (2026-11-08, PR #24).** The cheese shortcut is dropped
@@ -22,7 +22,7 @@
   within 1.5 ft of the barrier; rocks at least 1.5 ft from the mat's edge; safe profile 0.4 m/s;
   0.5 s on the pad from our own touchdown; return spot 0.725 m off the barrier and halfway between
   the west net and M1. Full course, near and far ladder: done and returned, 0 contacts (seed 405:
-  0.85 s on the pad floor, rotor tips 0.21 m from the west net). Details: agents/logs/2026-11-07-cheese-sim.md.
+  0.85 s on the pad floor, rotor tips 0.21 m from the west net). Details: docs/logs/2026-11-07-cheese-sim.md.
 
 ## Live drone, read 2026-11-08 00:26 (USB, read-only)
 
@@ -54,7 +54,7 @@ acceptance/geometry tools. This does not include all work on other branches:
 Inspect branch contents without switching a shared checkout:
 
 ```sh
-git show 71e6096:agents/logs/2026-11-07-goalnav-oak-depth-handoff.md
+git show 71e6096:docs/logs/2026-11-07-goalnav-oak-depth-handoff.md
 ```
 
 No document can prove which mission or camera pipeline is running right now.

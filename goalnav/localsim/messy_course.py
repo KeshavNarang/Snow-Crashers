@@ -61,7 +61,7 @@ SCAN_SHIFT = {'M2': (0.29, 0.), 'M3': (0.70, 0.)}
 SCAN_YAW = {'M1': -6.}
 # Wall layouts. 'scan': the walls as scanned (above). 'rebuilt': the maze as
 # rebuilt on 2026-11-07 (photos/Changed_Walls.jpeg, photos/New_Walls_*;
-# measured in agents/logs/2026-11-07-walls-rebuilt.md). LAYOUT is the default;
+# measured in docs/logs/2026-11-07-walls-rebuilt.md). LAYOUT is the default;
 # generate(..., layout=...) and goalrun --layout pick one per run. Either way
 # the floor tape and the lines tied to it (CP1, gate A) follow the walls as
 # scanned: the tape was not re-laid with the rebuild.

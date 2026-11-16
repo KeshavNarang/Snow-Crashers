@@ -55,7 +55,7 @@ PARAMS = {
     'depth_tile': 8,                                       # nearest return of each tile x tile block
     'points_topic': '',                                    # optional PointCloud2 source instead
     # The image for the floor tape and the pad. The team camera config runs no colour camera (it
-    # cost cuVSLAM ~7 Hz, agents/logs/2026-11-07-goalnav-hardware.md), so: the left mono image; the
+    # cost cuVSLAM ~7 Hz, docs/logs/2026-11-07-goalnav-hardware.md), so: the left mono image; the
     # pad needs colour (set /oak/rgb/image_raw and /oak/rgb/camera_info when it runs).
     'image_topic': '/oak/left/image_mono', 'image_info_topic': '/oak/left/camera_info',
     'pad_image_topic': '', 'pad_info_topic': '',          # empty: the pad is found in image_topic

@@ -4,7 +4,7 @@
 # on-camera depth) and the rgb: block. USB budget (stock notes below): the pair at
 # 1024x640@30 bgr8 = 118 MB/s of a ~143 MB/s ceiling; colour 640x400@10 bgr8 adds ~7.7 MB/s.
 # James's depth/rgbd image added on-camera depth on top and PX4 stopped fusing VIO
-# (agents/logs/2026-11-07-overwall-pad.md). Installed by team_ws/Dockerfile.
+# (docs/logs/2026-11-07-overwall-pad.md). Installed by team_ws/Dockerfile.
 #
 # OAK-D-S2 camera configuration for the cuVSLAM pipeline (depthai_ros_driver_v3).
 #

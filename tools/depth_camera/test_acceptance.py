@@ -1,6 +1,6 @@
 """Evals for the acceptance contract (acceptance.py): python3 -m unittest -v test_acceptance
 
-judge(baseline, candidate) applies the pass/fail rules written in agents/logs/2026-11-07-depth-camera-plan.md
+judge(baseline, candidate) applies the pass/fail rules written in docs/logs/2026-11-07-depth-camera-plan.md
 BEFORE any measurement existed. A criterion with no data is a failure ("not measured"), never a pass, except
 the floor check, which only applies when the floor dominates the view.
 """

@@ -39,7 +39,7 @@ the team flies the full course. Its code is in git history (PR #24 removed it).
 The former race stack and its guide (`goalnav/docs/LOCAL_SIM.md`) were removed on
 2026-11-07: no race or fast modes, we play it safe. `localsim/run.py --px4` remains
 for PX4 SITL.
-[Organizer AI_CONTEXT.md](../goalnav/docs/organizer/AI_CONTEXT.md) describes a
+[Organizer AI_CONTEXT.md](organizer/AI_CONTEXT.md) describes a
 separate lab simulator; its ROS version, topics and arming example are not the
 hardware deployment contract. [The Isaac/Pegasus spike](../skybetav1/sim/README.md)
 is another separate path and is documented as unexecuted.

@@ -3,7 +3,7 @@
 Purpose: give the pad detector (`goalnav/drone_ref/goalnav/pad_detect.py`: chromaticity histogram of the
 mat's colours, rays cast onto the floor plane) a colour image on the real drone. The OAK-D S2 has a colour
 sensor but the stack's driver publishes only the mono pair (config is organizer-owned, `~/skybeta`), so
-the pad is never seen on the drone and the mission flies home (agents/logs/2026-11-07-goalnav-hardware.md).
+the pad is never seen on the drone and the mission flies home (docs/logs/2026-11-07-goalnav-hardware.md).
 Worth: CP5 landing 7 pts + the x1.25 return bonus on run points + the aux-sensor presentation story (rule 4.6).
 
 Each candidate is scored PASS / FAIL / UNKNOWN per line; a FAIL on a MUST rejects it. UNKNOWN on a MUST

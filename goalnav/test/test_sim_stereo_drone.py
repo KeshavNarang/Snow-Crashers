@@ -1,7 +1,7 @@
 """The simulator's RGBSTEREO depth and colour look like skybeta-03's, as measured on 2026-11-08.
 
 Read-only capture on skybeta-03 (2026-11-08, ``/goalnav/stereo/points``, ``/oak/rgb/image_raw``; analysis
-in agents/logs/2026-11-08-sim-stereo-drone.md). Depth comes from drone_ref/stereo_node.py running
+in docs/logs/2026-11-08-sim-stereo-drone.md). Depth comes from drone_ref/stereo_node.py running
 overwall_nav.stereo.StereoRig (scale 0.4, 96 disparities, step 2, rows 0-90 %):
 
 - field of view -22.8..+37.5 deg across, -26.3..+20.6 deg down (the left 96 of 410 columns cannot be

@@ -1,23 +1,23 @@
 # Snow Crashers: agent guide
 
-**Current project guidance:** start at [docs/README.md](docs/README.md).
-[docs/STATUS.md](docs/STATUS.md) supersedes stale deployment, camera and competition-rule claims below.
+**Current project guidance:** start at [docs/README.md](README.md).
+[docs/STATUS.md](STATUS.md) supersedes stale deployment, camera and competition-rule claims below.
 
 Stanford DroneHacks 2026 entry. Read `README.md` (human notes, scoring), `THOUGHTS.md`,
 `goalnav/README.md` and `goalnav/docs/GOALNAV.md` first. Official rules:
-`goalnav/docs/organizer/`. Don't edit `README.md` (human-owned). Use git, not jj.
+`docs/organizer/`. Don't edit `README.md` (human-owned). Use git, not jj.
 
 ## Auxiliary sensor workstream (historical competition constraints)
 
 The original auxiliary-sensor plan used **one auxiliary sensor** (historical rule 4: < US$100 market value, < 50 g, powered from the
 drone battery, declared at inspection with part number, price link and mass; no GNSS, no
 off-drone beacons, no lasers above Class 1) to win "technically impressive" points and help
-the course. Sensor choice/status lives in `agents/sensor/README.md`. If you are a session
+the course. Sensor choice/status lives in `docs/sensor/README.md`. If you are a session
 touching sensor code, mounts, drivers or fusion, read that first and log your work there.
 
 ## Live pipeline
 
-The user confirms several successful simple `snowcrashers_nav` flights; wall crossing is also reported in the logs. Goalnav was deployed and bench-run props-off, but a successful goalnav course flight is not established (the cheese shortcut is dropped). A newer branch records a team image with on-camera depth (~28 Hz), replacing earlier CPU-stereo assumptions. See [current status](docs/STATUS.md) and [camera contracts](docs/CAMERAS.md); verify the live configuration before deployment.
+The user confirms several successful simple `snowcrashers_nav` flights; wall crossing is also reported in the logs. Goalnav was deployed and bench-run props-off, but a successful goalnav course flight is not established (the cheese shortcut is dropped). A newer branch records a team image with on-camera depth (~28 Hz), replacing earlier CPU-stereo assumptions. See [current status](STATUS.md) and [camera contracts](CAMERAS.md); verify the live configuration before deployment.
 
 ## Required RGB for pad finding
 
@@ -27,7 +27,7 @@ claims as a blocker, or ship mono/depth-only as a ready pad mission. Resolve
 VIO/performance issues with RGB retained. Never fake RGB-sensor values, images,
 calibration, timestamps or detection results. Report missing/stale data honestly;
 simulation images must be clearly identified and never used as live evidence.
-See [docs/CAMERAS.md](docs/CAMERAS.md#required-for-the-real-pad-mission).
+See [docs/CAMERAS.md](CAMERAS.md#required-for-the-real-pad-mission).
 
 ## Evals first (the workflow)
 
@@ -50,7 +50,7 @@ bounded by "Budgets and anti-gaming" below.** For every fix or feature:
    touches the Jetson (tests under `team_ws/src/overwall_nav/test/`, `tools/drone_tools/`).
    For a speed-up, keep a FROZEN copy of the old function in the test and assert same answers plus a
    speed ratio in the same process (see `test/test_floorfit_speed.py`).
-5. **Measure on the drone** only after the evals pass, and record numbers in `agents/logs/`.
+5. **Measure on the drone** only after the evals pass, and record numbers in `docs/logs/`.
    A measurement taken in the first ~5 minutes after boot is warm-up, not steady state.
 Use a git worktree (`git worktree add ../<name> -b agent/<topic> origin/main`) rather than
 switching branches in the shared checkout; other sessions work in it.
@@ -58,7 +58,7 @@ switching branches in the shared checkout; other sessions work in it.
 ## Budgets and anti-gaming (hard limits)
 
 Evals exist to catch a real failure, not to look thorough. These limits are hard: at a limit, STOP, write
-what is done and what is left in `agents/logs/`, and ask the user before going on. Note the start time in
+what is done and what is left in `docs/logs/`, and ask the user before going on. Note the start time in
 the log when you begin a task.
 
 **Time (wall clock, whole task from first command to merged PR, evals included)**
@@ -97,7 +97,7 @@ diligence" are the problem this section is here to stop.
 
 Never push straight to `main`. Work in your own worktree on an `agent/<topic>` branch, then:
 1. Evals green on the merged result: `git fetch && git merge origin/main`, then the whole suite
-   (other branches land often; the shared `agents/STATUS.md` table conflicts every time, keep both rows).
+   (other branches land often; the shared `docs/logs/BOARD.md` table conflicts every time, keep both rows).
 2. `git push -u origin agent/<topic>`, then `gh pr create --fill` with a body saying what changed, what the
    evals cover, and what was NOT measured on the drone.
 3. `gh pr merge <n> --merge` once it shows MERGEABLE / CLEAN. To land someone else's branch, merge `main`
@@ -131,24 +131,24 @@ the hostname does not resolve, say so; do not guess other hosts.
   asks: on stock PX4 v1.16.2 the flight controller's TELEM2 link stays dead until the FC is power-cycled
   (`skybetav1/CLAUDE.md` bug #15; a patched firmware fixes it, not confirmed for skybeta-03). To change the
   camera driver, swap the driver component inside the running container; see
-  `agents/logs/2026-11-07-depth-camera-plan.md` (branch `agent/depth-camera`).
+  `docs/logs/2026-11-07-depth-camera-plan.md` (branch `agent/depth-camera`).
 - Read-only inspection by default (topics, logs, params). No arming, no motor commands, no
   flight scripts, no PX4 param changes without the user explicitly approving that action.
 - Props off on the bench. A human with RC kill switch watches every flight.
 - Never run two missions/controllers at once; don't publish to `/fmu/in/*` directly (see
   `skybetav1/docs/competitor_guide.md`).
-- Competition constraints on stored course data, fixed waypoints and camera-pipeline changes are historical. The user reports organizers are now flexible; follow [current guidance](docs/STATUS.md#current-competition-guidance), rather than blocking the requested shortcut on those old rules. This does not authorize unrelated motor commands or PX4 changes.
+- Competition constraints on stored course data, fixed waypoints and camera-pipeline changes are historical. The user reports organizers are now flexible; follow [current guidance](STATUS.md#current-competition-guidance), rather than blocking the requested shortcut on those old rules. This does not authorize unrelated motor commands or PX4 changes.
 
 ## Working together (multiple agents)
 
-- Coordination board: `agents/STATUS.md`. Before starting, read it. Claim a task by adding a row
+- Coordination board: `docs/logs/BOARD.md`. Before starting, read it. Claim a task by adding a row
   (owner, files, status). On finishing or stopping, update it. Keep it short.
 - One workstream per branch: `agent/<topic>` (e.g. `agent/sensor-driver`). Small commits,
   rebase on `main`, don't force-push others' branches. Check `git status` before editing; others
   may have uncommitted work in the tree.
 - Hardware is a shared, single resource: use `tools/drone-lock`; see
   `agents/PROTOCOL.md` for the lock, logging and handoff rules.
-- Keep findings in files (`agents/sensor/`, `agents/logs/`), not only in chat, so the next
+- Keep findings in files (`docs/sensor/`, `docs/logs/`), not only in chat, so the next
   session can pick up.
 - Simulate first: `goalnav/localsim` (see `goalnav/README.md`). Run `python3 -m pytest` where
   tests exist before pushing.

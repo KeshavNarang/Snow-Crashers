@@ -6,7 +6,7 @@ Reads only (never commands the drone):
 
 Subscribes  /oak/rgb/image_raw (best effort), /oak/rgb/camera_info. The stack's stock camera
             config publishes no colour: it needs the team camera config with the colour camera on
-            (agents/logs/2026-11-07-overwall-pad.md).
+            (docs/logs/2026-11-07-overwall-pad.md).
 Publishes   /overwall/pad  std_msgs/String JSON, every processed frame (also when nothing is seen,
             so the mission knows the detector runs):
             candidates   [{'centre': [f, l], 'sides': [short, long], 'touches', 'pixels'}, ...]

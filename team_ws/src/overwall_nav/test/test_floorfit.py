@@ -1,6 +1,6 @@
 """fit_floor must return the FLOOR, not whichever plane has the most inliers.
 
-Found on skybeta-03 (agents/logs/2026-11-07-depth.md): on a glossy table only ~28 % of pixels match,
+Found on skybeta-03 (docs/logs/2026-11-07-depth.md): on a glossy table only ~28 % of pixels match,
 so the table and a box face ahead tie in inliers and consecutive frames flip between them
 (pitch 28-37 deg / height 0.10 m = correct; pitch 68-91 deg / height 0.3 m = the box). The wrong fit
 becomes the mission's ground height and biases obstacle and wall-top readings by ~0.18 m.

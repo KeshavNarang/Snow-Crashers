@@ -51,7 +51,7 @@ POINTS_TOPIC = '/goalnav/stereo/points'
 # The camera pipelines the drone can run (goalnav.launch.py CAMERA_MODES; test_sim_camera.py keeps the
 # goalnav topics equal). rgbstereo, the team config: stereo_node depth on the Jetson, 3.77 Hz and
 # 0.159 s old on average, both jittered (localsim.jetson_stereo; measured 2026-11-08,
-# agents/logs/2026-11-08-sim-stereo-drone.md), the pad found in colour on its own 10 Hz clock.
+# docs/logs/2026-11-08-sim-stereo-drone.md), the pad found in colour on its own 10 Hz clock.
 # rgbd: the OAK-D's own depth (it cost PX4 its VIO fusion on skybeta-03).
 SIM_CAMERAS = {
     'rgbstereo': {'hz': 3.77, 'latency': 0.159,

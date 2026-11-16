@@ -1,7 +1,7 @@
 """pad.py on rendered colour views of the real mat, from skybeta-03's colour camera.
 
 Camera: the OAK-D-S2 colour camera (IMX378) at 640x400, K from its factory calibration
-(agents/logs/colourtest-20261107-184424/calibration.json: fx 1468.8 at 1920 wide, so 489.6 at
+(docs/logs/colourtest-20261107-184424/calibration.json: fx 1468.8 at 1920 wide, so 489.6 at
 640), mounted with the mono pair at 27 deg down. Its vertical field is only +-22 deg, so it sees
 the floor from 5 to 49 deg below level: nothing nearer than ~0.87 x its height.
 

@@ -32,7 +32,7 @@ The mono sensors can publish `bgr8`; that encoding does not make their pixels co
 | Organizer config in this checkout: `pipeline_gen.i_pipeline_type: stereo` | Mono pair + IMU; no on-camera depth/colour in the measured original pipeline |
 | Later team image, recorded in `agent/goalnav-oak-depth` | `depth` pipeline; on-camera depth plus mono pair, colour intentionally disabled |
 | Tested `rgbd` pipeline | Depth + colour + pair; worked but reduced integrated cuVSLAM rate |
-| **Team image now (`team_ws/camera/oakd_vslam.yaml`, main, PR #18)** | **`RGBSTEREO`: colour + mono pair, no on-camera depth.** On skybeta-03, `rgbd` and `depth` both left PX4 without VIO fusion (USB link saturated); RGBSTEREO fused, cuVSLAM 28 Hz ([log](../agents/logs/2026-11-07-overwall-pad.md)) |
+| **Team image now (`team_ws/camera/oakd_vslam.yaml`, main, PR #18)** | **`RGBSTEREO`: colour + mono pair, no on-camera depth.** On skybeta-03, `rgbd` and `depth` both left PX4 without VIO fusion (USB link saturated); RGBSTEREO fused, cuVSLAM 28 Hz ([log](logs/2026-11-07-overwall-pad.md)) |
 
 Colour camera tilt on skybeta-03 is fixed by the mount: TF base_link to
 `oak_rgb_camera_optical_frame` gives 27.0 deg down; the left mono camera, 27.6 deg.
@@ -56,9 +56,9 @@ These are bench observations in the session logs/handoff, not a live rate check
 or a flight qualification. CameraInfo rate and ordinary Python image-subscriber
 rate are not interchangeable with the rate cuVSLAM actually receives.
 
-Sources: [hardware sessions](../agents/logs/2026-11-07-goalnav-hardware.md),
-[CPU/frame-loss corrections](../agents/logs/2026-11-07-cpu-monitor.md), and
-`git show 71e6096:agents/logs/2026-11-07-goalnav-oak-depth-handoff.md`.
+Sources: [hardware sessions](logs/2026-11-07-goalnav-hardware.md),
+[CPU/frame-loss corrections](logs/2026-11-07-cpu-monitor.md), and
+`git show 71e6096:docs/logs/2026-11-07-goalnav-oak-depth-handoff.md`.
 The handoff supersedes earlier claims that organizer permission was still pending.
 
 ## Goalnav input contracts

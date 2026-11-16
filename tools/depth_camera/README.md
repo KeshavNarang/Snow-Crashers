@@ -1,6 +1,6 @@
 # depth_camera: on-device depth from the OAK-D S2, without breaking VIO
 
-Plan, facts from the driver source and the pass/fail contract: `agents/logs/2026-11-07-depth-camera-plan.md`.
+Plan, facts from the driver source and the pass/fail contract: `docs/logs/2026-11-07-depth-camera-plan.md`.
 
 | File | What |
 |---|---|

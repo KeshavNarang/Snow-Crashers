@@ -3,7 +3,7 @@
 > Current requirement: real RGB is mandatory for pad finding; enabling the existing OAK-D colour sensor is competition-permitted, confirmed by the user. Do not fake RGB-sensor values. The candidate/rule discussion below is historical; see [current camera guidance](../../docs/CAMERAS.md).
 
 Status (2026-11-08): leading idea = a small downward COLOUR camera so the pad detector can see the mat.
-Criteria were written first: `agents/sensor/CRITERIA.md`. Candidate scoring below; nothing bought or
+Criteria were written first: `docs/sensor/CRITERIA.md`. Candidate scoring below; nothing bought or
 installed. Update this file as decisions are made.
 
 Constraints (rule 4): < US$100 market price (not what we paid), < 50 g incl. board/lens, powered

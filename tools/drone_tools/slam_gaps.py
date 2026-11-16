@@ -6,7 +6,7 @@ cuVSLAM logs a warning whenever the gap between two frames it receives is over 4
 The gaps are exact multiples of the 33.3 ms frame period, so each one counts frames that never arrived.
 That makes cuVSLAM, the navigation-critical consumer, the best judge of the real delivered frame rate.
 (A plain Python subscriber sees a lower rate, 24-26 Hz here, because of consumer-side drops; do not use it
-to judge the camera. See agents/logs/2026-11-07-cpu-monitor.md.)
+to judge the camera. See docs/logs/2026-11-07-cpu-monitor.md.)
 
 Run on the drone HOST:
     python3 slam_gaps.py                                  read the stack's slam tmux window

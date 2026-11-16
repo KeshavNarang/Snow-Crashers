@@ -4,7 +4,7 @@ The skybeta stack runs the camera with no on-board depth and no colour camera: i
 publishes only ``/oak/{left,right}/image_mono`` (1024x640 at 30 Hz, raw) and their
 CameraInfo, for cuVSLAM. This node does the stereo matching on the Jetson with
 overwall_nav's ``StereoRig`` (rectify both at ``scale``, OpenCV SGBM, points in the left
-camera's frame; tuned on skybeta-03, see agents/logs/2026-11-07-depth-bottleneck.md) and
+camera's frame; tuned on skybeta-03, see docs/logs/2026-11-07-depth-bottleneck.md) and
 publishes, for each pair it processes (at most ``rate_hz``):
 
 - ``/goalnav/stereo/points``   PointCloud2, metres in the left camera's optical frame

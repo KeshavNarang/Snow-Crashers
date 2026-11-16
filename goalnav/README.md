@@ -20,7 +20,7 @@ CAD-replay race stack did not). ROS 2 package name: `drone_ref`.
 | `assets/course-scan.npz` | The 2026-11-06 phone scan, aligned to the nets, cropped (made by `tools/course_scan.py`) |
 | `tools/course_map.py` | The labelled course map (scan, goal chain, one run, window elevation, drone side view) |
 | `docs/GOALNAV.md` | Design notes (written before the scan; see "Since the notes" below) |
-| `docs/organizer/` | The organizers' rules, hardware notes and AI context |
+| [`../docs/organizer/`](../docs/organizer/) | The organizers' rules, hardware notes and AI context (moved to the central docs) |
 
 ## Simulate
 

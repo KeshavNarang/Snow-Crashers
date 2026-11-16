@@ -1,7 +1,7 @@
 """acceptance: the pass/fail contract for on-device depth, fixed before any measurement.
 
 judge(baseline, candidate) compares a run with the depth configuration against a run with the organizers'
-configuration taken minutes earlier on the same scene. Rules (agents/logs/2026-11-07-depth-camera-plan.md):
+configuration taken minutes earlier on the same scene. Rules (docs/logs/2026-11-07-depth-camera-plan.md):
 
   A1 cameras   left/right >= 29.5 Hz by header stamp, missing frames <= baseline + 0.5 points, pairing >= 99 %
   A2 cuVSLAM   gap warnings/min <= 1.5 x baseline + 2, odometry >= 29 Hz, tracking >= 99 %,

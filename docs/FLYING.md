@@ -63,7 +63,7 @@ Do steps 1-2 **off the pad** so nobody waits on the warm-up.
   started by the launch with `camera:=rgbstereo`, the default) and finds the helipad in colour. The
   older depth + colour config (`team_ws/camera/oakd_vslam.depth.yaml`, goalnav `camera:=rgbd`) made PX4
   stop fusing VIO on skybeta-03 (no valid position, can't fly Position/Offboard), so don't use it; see
-  `agents/logs/2026-11-07-overwall-pad.md`.
+  `docs/logs/2026-11-07-overwall-pad.md`.
 - **PX4 link must be up.** If it's down, power-cycle the Pixhawk.
 - It must print a **goalnav status** at the end. If it says "NO goalnav status", don't fly: run
   `deploy` again and power-cycle.
@@ -92,7 +92,7 @@ yet:** `run_mission.sh` only picks the package and launch file, so ask whoever s
 launch how the drone's start-up passes `tuning` through.
 
 After each flight run `tools/fly logs`, and write what happened (and the log folder name) in
-`agents/logs/` so the next person can pick it up.
+`docs/logs/` so the next person can pick it up.
 
 ## Test in the simulator first (optional, on your laptop)
 
@@ -122,6 +122,6 @@ with no contact before landing. Simulator results don't guarantee the real drone
 | No goalnav status | The mission didn't start: `deploy` again, then power-cycle. |
 | Lands without finding the helipad | Camera colour is off (preflight "colour camera" FAIL): see "Reading tools/fly check". |
 
-More detail: `agents/logs/2026-11-07-goalnav-fly.md` (how goalnav was first deployed by hand),
-`agents/logs/2026-11-07-planner-rebuilt.md` (the route and its sim results),
+More detail: `docs/logs/2026-11-07-goalnav-fly.md` (how goalnav was first deployed by hand),
+`docs/logs/2026-11-07-planner-rebuilt.md` (the route and its sim results),
 `skybetav1/docs/competitor_guide.md` (the organizers' rules).

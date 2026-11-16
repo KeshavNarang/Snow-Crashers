@@ -3,12 +3,12 @@
 # measurement changes, change it here (with its source) and re-run the batch.
 #
 # Already matched in goalrun itself (no flag needed): camera pitch 27.6 deg and offset
-# (agents/logs/2026-11-07-goalnav-calibration.md, from the TF), HFOV 77.5 deg, baseline 7.5 cm.
+# (docs/logs/2026-11-07-goalnav-calibration.md, from the TF), HFOV 77.5 deg, baseline 7.5 cm.
 #
 # Keys: camera_hz, camera_latency (s, capture to points; both means, rgbstereo jitters them), vehicle (VehicleConfig fields).
 
 drone:
-  source: read-only capture on skybeta-03 2026-11-08 (agents/logs/2026-11-08-sim-stereo-drone.md), stereo_node 3.77 Hz, age mean 0.159 s (median 0.111, p90 0.28); goalrun jitters both around these means (localsim/jetson_stereo.py). Was 4.0 Hz / 0.234 s (2026-11-07-goalnav-hardware.md)
+  source: read-only capture on skybeta-03 2026-11-08 (docs/logs/2026-11-08-sim-stereo-drone.md), stereo_node 3.77 Hz, age mean 0.159 s (median 0.111, p90 0.28); goalrun jitters both around these means (localsim/jetson_stereo.py). Was 4.0 Hz / 0.234 s (2026-11-07-goalnav-hardware.md)
   camera_hz: 3.77
   camera_latency: 0.159
 

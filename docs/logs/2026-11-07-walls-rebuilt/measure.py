@@ -4,7 +4,7 @@ For each overhead photo: a floor homography fitted to the floor tape's corners
 (CAD 'Guideline (zone 1)'), then the stand feet and pavers clicked by hand in the
 photo mapped onto the floor. Only points on the floor are valid (the photos are
 wide-angle from ~2 m up: anything tall lands far from its foot). Run from the
-repo root: python agents/logs/2026-11-07-walls-rebuilt/measure.py
+repo root: python docs/logs/2026-11-07-walls-rebuilt/measure.py
 """
 import cv2
 import numpy as np

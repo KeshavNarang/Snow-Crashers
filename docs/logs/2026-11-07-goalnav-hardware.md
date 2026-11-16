@@ -74,7 +74,7 @@ depth on the drone (the simulator assumes 4.5). A threaded or C++ node, or on-ca
 
 ## Third session: colour camera, on-camera depth, goalnav deployed (18:44-19:10, props off, lock taken)
 Stack stopped for the camera tests (camera free), then restarted. Scripts and results in
-`agents/logs/colourtest-20261107-184424/` (also in ~/team_ws/logs/ and ~/team_ws/tools/ on the drone).
+`docs/logs/colourtest-20261107-184424/` (also in ~/team_ws/logs/ and ~/team_ws/tools/ on the drone).
 
 - **Colour camera:** depthai reports CAM_A = IMX378 COLOR, CAM_B/C = OV9282. Factory calibration: colour 3.78 cm
   from the left camera, 3.76 cm from the right (centred). Frames saved (`colour_*.png`): sharp, a bit dark.

@@ -19,10 +19,10 @@ live inspection of the drone.
 - [Detailed drone setup](../team_ws/DRONE_SETUP.md): includes historical troubleshooting;
   use the current flight guide first.
 - [Organizer stack](../skybetav1/README.md) and [flight-interface contract](../skybetav1/docs/competitor_guide.md)
-- [Dated session logs](../agents/logs/): historical measurements and decisions;
+- [Dated session logs](logs/): historical measurements and decisions;
   later sections can supersede earlier sections in the same file.
-- [Agent coordination board](../agents/STATUS.md): task handoffs, not proof of live deployment.
-- [Original organizer lab context](../goalnav/docs/organizer/AI_CONTEXT.md): a different
+- [Agent coordination board](logs/BOARD.md): task handoffs, not proof of live deployment.
+- [Original organizer lab context](organizer/AI_CONTEXT.md): a different
   simulator environment, not the hardware's current ROS/topic contract.
 - Root `README.md` and `THOUGHTS.md` are preserved human notes. Older scoring and
   restrictions there should be read with the team's current guidance in STATUS.md.

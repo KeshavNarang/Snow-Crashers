@@ -6,7 +6,7 @@ open in the landing area, between the launch corridor's barrier panel and the
 mat, its rear legs toward the west net and its steps facing east-north-east,
 toward A1.
 
-Placement and size were measured from ``photos/Ladder_*.jpg`` (agents/logs/
+Placement and size were measured from ``photos/Ladder_*.jpg`` (docs/logs/
 2026-11-07-ladder.md): the three cameras solved against the scan's barrier
 panel 1, the drone on the launch mark and the net's 5 ft rail, the feet cast
 onto the floor, the four feet fitted as one rectangle. Footprint centre
@@ -41,7 +41,7 @@ class Pose:
 
 
 POSES = {
-    # Between the barrier's first panel and the mat (agents/logs/2026-11-07-ladder.md).
+    # Between the barrier's first panel and the mat (docs/logs/2026-11-07-ladder.md).
     # The team (2026-11-07 evening): no more than 1.5 ft from the barrier behind the drone at
     # the start (barrier panel 1 centreline y ~0.36 at x -2.31); the photo fit put it at y -0.62.
     'original': Pose((-2.31, -0.25), 16., 'photos/Ladder_*.jpg + team correction, 2026-11-07',
